@@ -105,6 +105,7 @@ footer{margin-top:44px;color:var(--dim);font-size:.8rem}
     <div class="bar">
       <button id="go" class="btn pri" disabled>Play</button>
       <label class="ctl">Jump chance <input id="pj" type="range" min="0" max="100" value="50"></label>
+      <label class="ctl">Cut style <select id="cm" title="Smoothest = smallest difference across the cut. Natural = a model trained to recognize how real beat edges sound."><option value="dist">smoothest</option><option value="learned">natural (learned)</option></select></label>
       <label class="ctl">Feeling <select id="mode"><option value="any">any (classic)</option><option value="same">stay in the energy</option><option value="up">build up</option><option value="down">wind down</option></select></label>
       <div class="chips"><span class="chip" id="c1">0 beats</span><span class="chip" id="c2">0 jumps</span><span class="chip g" id="c3">idle</span></div>
     </div>
@@ -119,6 +120,7 @@ footer{margin-top:44px;color:var(--dim);font-size:.8rem}
   </section>
   <footer>F33L is early research, not a finished product. Beat feeling tags are energy and brightness proxies, not a validated emotion model. Inspired by the MIT-licensed Infinite Jukebox.</footer>
 </main>
+<script src="continuity_model.js"></script>
 <script src="analyze.js"></script>
 <script>
 let ctx,buf,g,cur=0,playing=false,nextT=0,timer,jumps=0;
@@ -132,7 +134,7 @@ async function useAudio(arrayBuffer,label){
   catch(e){$('n1').textContent='Could not read that file. Try an mp3, wav or m4a.';setBusy('');return;}
   $('n1').textContent=label;$('d1').classList.add('ok');
   try{const y=await toMono22k(buf);setBusy('Listening to the song...');
-    g=await F33LAnalyze.build(y,{onProgress:p=>setBusy('Listening to the song... '+Math.round(p*100)+'%')});
+    lastY=y;g=await F33LAnalyze.build(y,{model:cutModel(),onProgress:p=>setBusy('Listening to the song... '+Math.round(p*100)+'%')});
     g.out={};g.edges.forEach(x=>(g.out[x.a]=g.out[x.a]||[]).push(x.b));ready();}
   catch(e){setBusy('Something went wrong analyzing that song.');}}
 $('aud').onchange=async e=>{const f=e.target.files[0];if(f)await useAudio(await f.arrayBuffer(),f.name);};
@@ -154,10 +156,10 @@ async function loadDemo(){
     $('c1').textContent=g.beats+' beats';$('st').textContent=g.edges.length+' possible jumps at '+g.bpm+' BPM. Loading audio...';draw();}
   catch(err){$('st').textContent='The demo needs the website or a local server, not a file.';return;}
   try{ctx=ctx||new AudioContext();buf=await ctx.decodeAudioData(await fetch('demo/demo.mp3').then(r=>r.arrayBuffer()));
-    $('n1').textContent='demo.mp3 (original F33L demo)';$('d1').classList.add('ok');ready();}
+    $('n1').textContent='demo.mp3 (original F33L demo)';$('d1').classList.add('ok');ready();try{lastY=await toMono22k(buf);}catch(e){}}
   catch(err){$('st').textContent='Could not load the demo audio in this browser.';}}
 $('demo').onclick=loadDemo;if(location.search.includes('demo'))loadDemo();
-let since=0,master,recent=[],labels=[];const songKey=()=>(g?g.beats+'|'+Math.round((g.duration||0)*10):'');const XF=0.02; // 20 ms crossfade at every beat edge (transparent when the audio is continuous)
+let since=0,master,recent=[],labels=[],lastY=null;const cutModel=()=>($('cm').value==='learned'&&window.F33LModel)?window.F33LModel:null;const songKey=()=>(g?g.beats+'|'+Math.round((g.duration||0)*10):'');const XF=0.02; // 20 ms crossfade at every beat edge (transparent when the audio is continuous)
 function pick(i){
   const outs=g.out[i],sl=$('pj').value/100;
   // like the original: chance to jump starts low and grows the longer we have gone without one, so the song keeps its shape
@@ -172,11 +174,14 @@ function label(kind){
   const now=ctx.currentTime,j=[...recent].reverse().find(x=>x.at<=now+.05&&now-x.at<=8);
   if(!j){$('st').textContent='No recent jump to label yet. Wait until you hear one.';return;}
   const e=g.edges.find(x=>x.a===j.a&&x.b===j.b)||{};
-  labels.push({kind,a:j.a,b:j.b,d:e.d,s:e.s,l:e.l,mode:$('mode').value,when:Date.now()});
+  labels.push({kind,a:j.a,b:j.b,d:e.d,s:e.s,z:e.z,l:e.l,cut:$('cm').value,mode:$('mode').value,when:Date.now()});
   if(kind==='bad'){g.edges=g.edges.filter(x=>!(x.a===j.a&&x.b===j.b));g.out[j.a]=(g.out[j.a]||[]).filter(x=>x!==j.b);
     $('st').textContent=`Removed that jump (beat ${j.a} to ${j.b}). ${g.edges.length} jumps left.`;}
   else $('st').textContent='Marked smooth. Thank you.';
   saveLabels();draw();}
+async function rebuild(){if(!lastY)return;const was=playing;if(was)$('go').click();setBusy('Re-listening with the new cut style...');
+  g=await F33LAnalyze.build(lastY,{model:cutModel(),onProgress:p=>setBusy('Re-listening... '+Math.round(p*100)+'%')});g.out={};g.edges.forEach(x=>(g.out[x.a]=g.out[x.a]||[]).push(x.b));ready();}
+$('cm').onchange=rebuild;
 $('fbad').onclick=()=>label('bad');$('fgood').onclick=()=>label('good');
 addEventListener('keydown',e=>{if(!playing||/INPUT|SELECT|TEXTAREA/.test((e.target||{}).tagName))return;if(e.key==='b'||e.key==='B')label('bad');if(e.key==='g'||e.key==='G')label('good');});
 $('fexp').onclick=()=>{const blob=new Blob([JSON.stringify({engine:'v2',song:songKey(),bpm:g.bpm,labels},null,1)],{type:'application/json'});
