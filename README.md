@@ -17,10 +17,10 @@ you can steer a song by feeling. Everything runs in your browser. Your audio nev
 | Path | What it is |
 |---|---|
 | `index.html` | the jukebox player: drop a song, beat map, jump arcs, "stay in the feeling" modes |
-| `analyze.js` | the in-browser listener: builds the beat graph from any audio (port of `jukebox.py`) |
+| `analyze.js` | the in-browser listener: builds the beat graph from any audio (v2 engine: real beat tracking, transient-snapped cuts, splice-aware jump ranking) |
 | `src/serve.py` | optional local helper for YouTube links (127.0.0.1 only) |
 | `src/listen.py` | a moment-by-moment listening transcript for any song |
-| `src/jukebox.py` | builds the beat-similarity jump graph, locally |
+| `tools/` | `make_graph.js` (graph from a file) and `splice_metric.py` (an independent check of how smooth the jumps are) |
 | `src/align.py` | lines up lyric timings with the energy curve |
 | `src/make_demo.py` | generates the original demo track and its graph |
 | `tests/` | synthetic-audio tests with known answers |
@@ -36,7 +36,16 @@ you can steer a song by feeling. Everything runs in your browser. Your audio nev
 
 For your own listening only. Respect the service's terms and the artist's rights; do not redistribute. The helper listens on 127.0.0.1 only and accepts only https YouTube links.
 
-**Power users:** `python src/jukebox.py song.mp3 --ffmpeg ffmpeg` builds the same graph in Python (it matches the browser version edge for edge).
+**Power users:** `node tools/make_graph.js song.mp3 out.json --ffmpeg ffmpeg` builds the same graph the page builds.
+
+## How the jumps are chosen
+Looping a song without it sounding broken is mostly about *where you cut*. F33L v2 does this:
+1. **Real beats.** A dynamic-programming beat tracker follows the song's actual onsets, then each cut is snapped to the nearest transient, so cuts land on the start of a sound instead of in the middle of one.
+2. **Land one beat after the match.** After beat A, jump to the beat that *follows* a beat that sounds like A, so the music keeps flowing.
+3. **Rank by how the cut actually sounds.** Every candidate jump is scored by comparing the sound just before the cut with the sound just after it, against how rough a normal beat boundary is in the same song.
+4. **Crossfade every edge** by 20 ms (provably transparent when the audio is continuous), and **let the jump chance build slowly**, like the original, so the song keeps its shape.
+
+Measured on one real track (not a promise for every song): the share of jumps as smooth as an ordinary beat edge went from **46% to 86%** on a 4.5-minute rap track and from **21% to 73%** on the synthetic demo, using `tools/splice_metric.py`, which measures the real audio around each cut with different windows than the engine uses. That is a proxy. Whether it *sounds* seamless is a listening test, and vocals (a cut in the middle of a word) are still the hardest case.
 
 ## The idea
 1. **Measure the sound.** Turn audio into interpretable features: tempo, meter, key and mode, chord motion, melodic contour, register, dynamics, spectral brightness, roughness, texture, silence.
@@ -72,8 +81,8 @@ For your own listening only. Respect the service's terms and the artist's rights
 Early, working prototypes (all local; audio never leaves your machine; needs ffmpeg + numpy):
 - `src/listen.py`: a moment-by-moment "listening transcript" (loudness, brightness, rhythmic density, tempo, key guess per section).
 - `src/align.py`: lines up lyric timings (faster-whisper) with the energy curve. Outputs stay in the git-ignored `outputs/`; do not publish lyrics of copyrighted songs.
-- `src/jukebox.py` + `index.html`: a locally computed beat-similarity jump graph and a browser player that plays a song forever by jumping between beats that sound alike, with per-beat energy/brightness tags and a "stay in the feeling" mode. Inspired by the MIT-licensed Infinite/Eternal Jukebox (no Spotify API needed here).
-- `tests/`: synthetic-audio tests (known key, known tempo, known repeating structure). Run: `python -m unittest discover tests` and `node --test tests/analyze.test.js`.
+- `analyze.js` + `index.html`: a locally computed beat-similarity jump graph (`analyze.js`) and a browser player that plays a song forever by jumping between beats that sound alike, with per-beat energy/brightness tags and a "stay in the feeling" mode. Inspired by the MIT-licensed Infinite/Eternal Jukebox (no Spotify API needed here).
+- `tests/`: synthetic-audio tests (known key, known tempo, cuts landing on clicks). Run: `python -m unittest discover tests` and `node --test tests/analyze.test.js`.
 
 Known limits: key detection is unreliable on rap/vocal-heavy music; tempo can be half/double; the per-beat "feeling" tags are simple energy/brightness proxies, not a validated emotion model; the browser player has not yet had a listening test on real tracks.
 

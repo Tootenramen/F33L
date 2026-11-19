@@ -3,7 +3,6 @@ import os, sys, unittest
 import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 import listen as L
-import jukebox as J
 
 SR = L.SR
 def tone(freq, dur, harmonics=3):
@@ -28,18 +27,6 @@ class Tempo(unittest.TestCase):
             i = int(b * 0.5 * SR); y[i:i + 400] += np.random.RandomState(b).randn(400).astype(np.float32)
         mag = L.stft_mag(y); flux = np.concatenate([[0], np.maximum(0, np.diff(mag, axis=0)).sum(axis=1)])
         self.assertAlmostEqual(L.tempo(flux), 120, delta=4)
-
-class Graph(unittest.TestCase):
-    def test_repeating_bar_links_same_position(self):
-        rs = np.random.RandomState(1)
-        bar = [tone(f, 0.5) + 0.0 for f in (220, 330, 440, 660)]  # four distinct sounds per bar, 120 BPM
-        y = np.concatenate(bar * 16)
-        g = J.build(y, bpm=120, threshold=0.35)
-        self.assertGreater(len(g["edges"]), 20)
-        for e in g["edges"]:
-            self.assertEqual((e["a"] - e["b"]) % 4, 0)       # only same bar position
-            self.assertGreaterEqual(abs(e["a"] - e["b"]), 8)   # never trivial neighbours
-        for nd in g["nodes"]: self.assertTrue(0 <= nd["arousal"] <= 1)
 
 if __name__ == "__main__":
     unittest.main()

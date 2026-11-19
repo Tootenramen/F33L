@@ -1,9 +1,8 @@
 """Generate F33L's original demo track (synthetic, ours, no copyright issues) and its beat graph.
-Usage: python make_demo.py --ffmpeg path\to\ffmpeg.exe   -> demo/demo.mp3, demo/graph.json
+Usage: python make_demo.py --ffmpeg path\to\ffmpeg.exe   -> demo/demo.mp3   (then: node tools/make_graph.js demo/demo.mp3 demo/graph.json)
 """
 import argparse, json, subprocess, wave, os
 import numpy as np
-import jukebox as J
 
 SR, BPM = 22050, 105
 BEAT = 60.0 / BPM
@@ -48,6 +47,4 @@ if __name__ == "__main__":
         w.setnchannels(1); w.setsampwidth(2); w.setframerate(SR); w.writeframes((y * 32000).astype(np.int16).tobytes())
     subprocess.run([a.ffmpeg, "-y", "-v", "error", "-i", "../demo/_tmp.wav", "-b:a", "96k", "../demo/demo.mp3"], check=True)
     os.remove("../demo/_tmp.wav")
-    g = J.build(y, bpm=BPM, threshold=0.35)
-    json.dump(g, open("../demo/graph.json", "w"))
-    print(f"demo: {len(y)/SR:.1f}s, {g['beats']} beats @ {g['bpm']} BPM, {len(g['edges'])} jump edges")
+    print(f"demo: {len(y)/SR:.1f}s -> demo/demo.mp3")

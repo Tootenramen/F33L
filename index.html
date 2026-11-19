@@ -103,7 +103,7 @@ footer{margin-top:44px;color:var(--dim);font-size:.8rem}
     <div class="legend" aria-hidden="true"><span><i style="background:hsl(195 70% 26%)"></i>calm and dark</span><span><i style="background:hsl(335 70% 60%)"></i>loud and bright</span><span>arcs: where it can jump</span></div>
     <div class="bar">
       <button id="go" class="btn pri" disabled>Play</button>
-      <label class="ctl">Jump chance <input id="pj" type="range" min="0" max="100" value="40"></label>
+      <label class="ctl">Jump chance <input id="pj" type="range" min="0" max="100" value="50"></label>
       <label class="ctl">Feeling <select id="mode"><option value="any">any (classic)</option><option value="same">stay in the energy</option><option value="up">build up</option><option value="down">wind down</option></select></label>
       <div class="chips"><span class="chip" id="c1">0 beats</span><span class="chip" id="c2">0 jumps</span><span class="chip g" id="c3">idle</span></div>
     </div>
@@ -149,23 +149,32 @@ async function loadDemo(){
     $('n1').textContent='demo.mp3 (original F33L demo)';$('d1').classList.add('ok');ready();}
   catch(err){$('st').textContent='Could not load the demo audio in this browser.';}}
 $('demo').onclick=loadDemo;if(location.search.includes('demo'))loadDemo();
+let since=0,master;const XF=0.02; // 20 ms crossfade at every beat edge (transparent when the audio is continuous)
 function pick(i){
-  const outs=g.out[i];if(!outs||Math.random()*100>=$('pj').value)return i+1;
+  const outs=g.out[i],sl=$('pj').value/100;
+  // like the original: chance to jump starts low and grows the longer we have gone without one, so the song keeps its shape
+  const p=Math.min(.85,sl*.3+.02*since*(.4+sl));
+  if(!outs||Math.random()>=p){since++;return i+1;}
   const m=$('mode').value,a=g.nodes[i].arousal;
   const ok=outs.filter(j=>m==='any'||(m==='same'&&Math.abs(g.nodes[j].arousal-a)<.15)||(m==='up'&&g.nodes[j].arousal>=a)||(m==='down'&&g.nodes[j].arousal<=a));
-  if(!ok.length)return i+1;jumps++;return ok[Math.floor(Math.random()*ok.length)];}
+  if(!ok.length){since++;return i+1;}since=0;jumps++;return ok[Math.floor(Math.random()*ok.length)];}
 function sched(){
-  while(playing&&nextT<ctx.currentTime+.25){
-    if(cur>=g.nodes.length-1)cur=0;
-    const t0=g.nodes[cur].t,t1=g.nodes[cur+1].t,s=ctx.createBufferSource();
-    s.buffer=buf;s.connect(ctx.destination);s.start(nextT,t0,t1-t0);
+  const n=g.nodes.length,total=g.duration||buf.duration;
+  while(playing&&nextT<ctx.currentTime+.3){
+    if(cur>=n)cur=0;
+    const t0=g.nodes[cur].t,t1=cur+1<n?g.nodes[cur+1].t:total,d=Math.max(.05,t1-t0),pre=Math.min(XF/2,t0);
+    const src=ctx.createBufferSource(),gn=ctx.createGain(),st=nextT-pre;
+    src.buffer=buf;src.connect(gn);gn.connect(master);
+    gn.gain.setValueAtTime(0,st);gn.gain.linearRampToValueAtTime(1,nextT+XF/2);
+    gn.gain.setValueAtTime(1,nextT+d-XF/2);gn.gain.linearRampToValueAtTime(0,nextT+d+XF/2);
+    src.start(st,t0-pre,d+pre+XF/2);
     root.style.setProperty('--glow',g.nodes[cur].arousal.toFixed(2));
-    nextT+=t1-t0;cur=pick(cur);
+    nextT+=d;cur=pick(cur);
     $('c2').textContent=jumps+' jumps';$('st').textContent=`Beat ${cur} of ${g.beats}`;}
   draw();}
 $('go').onclick=()=>{
   if(playing){playing=false;clearInterval(timer);$('go').textContent='Play';$('c3').textContent='paused';root.style.setProperty('--glow',0);return;}
-  ctx.resume();playing=true;nextT=ctx.currentTime+.05;cur=0;jumps=0;$('go').textContent='Stop';$('c3').textContent='playing';timer=setInterval(sched,40);};
+  ctx.resume();if(!master){master=ctx.createGain();master.connect(ctx.destination);}playing=true;nextT=ctx.currentTime+.05;cur=0;jumps=0;since=0;$('go').textContent='Stop';$('c3').textContent='playing';timer=setInterval(sched,40);};
 function draw(){
   const W=cv.width,H=cv.height;c2.clearRect(0,0,W,H);
   if(!g){c2.fillStyle='rgba(169,179,203,.5)';c2.font='500 30px system-ui';c2.textAlign='center';c2.fillText('Your song will appear here as a map of beats',W/2,H/2);return;}
