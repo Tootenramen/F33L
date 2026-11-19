@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>F33L jukebox</title>
+<style>
+:root{--bg:#0b0d10;--fg:#e8eaed;--mut:#8a919b;--acc:#7cf5c8}
+@media (prefers-color-scheme:light){:root{--bg:#f6f7f9;--fg:#15181c;--mut:#5b6470;--acc:#0a8f6a}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif;padding:16px}
+main{max-width:980px;margin:0 auto}h1{margin:.2em 0}p.s{color:var(--mut);margin-top:0}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:12px 0}
+button,input,select{font:inherit;color:var(--fg);background:transparent;border:1px solid var(--mut);border-radius:8px;padding:8px 12px}
+button.p{background:var(--acc);color:#04130d;border-color:var(--acc);font-weight:600}
+canvas{width:100%;height:240px;border:1px solid var(--mut);border-radius:10px;display:block}
+#st{color:var(--mut);min-height:1.5em}label{color:var(--mut)}
+</style></head><body><main>
+<h1>F33L jukebox</h1>
+<p class="s">Plays a song forever by jumping between beats that sound alike. Your audio never leaves this page.</p>
+<div class="row">
+ <label>1. Audio file <input id="aud" type="file" accept="audio/*"></label>
+ <label>2. Graph (graph.json from <code>jukebox.py</code>) <input id="grf" type="file" accept=".json"></label>
+</div>
+<div class="row">
+ <button id="go" class="p" disabled>Play</button>
+ <label>Jump chance <input id="pj" type="range" min="0" max="100" value="40"></label>
+ <label>Stay in the feeling
+  <select id="mode"><option value="any">any (classic)</option><option value="same">same energy</option><option value="up">build up</option><option value="down">wind down</option></select></label>
+</div>
+<canvas id="cv" width="1960" height="480"></canvas>
+<div id="st">Load an audio file and its graph.json.</div>
+<script>
+let ctx, buf, g, cur=0, playing=false, nextT=0, timer, played=0, jumps=0;
+const $=id=>document.getElementById(id), cv=$('cv'), c2=cv.getContext('2d');
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function ready(){ $('go').disabled=!(buf&&g); if(buf&&g){$('st').textContent=`${g.beats} beats, ${g.edges.length} possible jumps. Press Play.`; draw();} }
+$('aud').onchange=async e=>{ctx=ctx||new AudioContext(); buf=await ctx.decodeAudioData(await e.target.files[0].arrayBuffer()); ready();};
+$('grf').onchange=async e=>{g=JSON.parse(await e.target.files[0].text()); g.out={}; g.edges.forEach(x=>(g.out[x.a]=g.out[x.a]||[]).push(x.b)); ready();};
+function pick(i){
+  const outs=g.out[i]; if(!outs||Math.random()*100>=$('pj').value) return i+1;
+  const m=$('mode').value, a=g.nodes[i].arousal;
+  const ok=outs.filter(j=>m==='any'||(m==='same'&&Math.abs(g.nodes[j].arousal-a)<.15)||(m==='up'&&g.nodes[j].arousal>=a)||(m==='down'&&g.nodes[j].arousal<=a));
+  if(!ok.length) return i+1; jumps++; return ok[Math.floor(Math.random()*ok.length)];
+}
+function sched(){
+  while(playing&&nextT<ctx.currentTime+.25){
+    if(cur>=g.nodes.length-1) cur=0;
+    const t0=g.nodes[cur].t, t1=g.nodes[cur+1].t, s=ctx.createBufferSource();
+    s.buffer=buf; s.connect(ctx.destination); s.start(nextT,t0,t1-t0);
+    nextT+=t1-t0; played++; cur=pick(cur);
+    $('st').textContent=`beat ${cur}/${g.beats}  jumps so far: ${jumps}`;
+  }
+  draw(); }
+$('go').onclick=()=>{ if(playing){playing=false;clearInterval(timer);$('go').textContent='Play';return;}
+  ctx.resume(); playing=true; nextT=ctx.currentTime+.05; cur=0; $('go').textContent='Stop'; timer=setInterval(sched,40); };
+function draw(){
+  if(!g) return; const W=cv.width,H=cv.height,n=g.nodes.length; c2.clearRect(0,0,W,H);
+  const x=i=>10+(W-20)*i/n, base=H-120, bw=Math.max(1,(W-20)/n);
+  c2.strokeStyle=css('--mut'); c2.globalAlpha=.12; c2.lineWidth=1;
+  g.edges.forEach(e=>{ if(Math.abs(e.a-e.b)<8) return; c2.beginPath(); c2.moveTo(x(e.a),base);
+    c2.quadraticCurveTo((x(e.a)+x(e.b))/2, base-Math.min(base-10,Math.abs(e.a-e.b)*(H/n)*.9), x(e.b), base); c2.stroke(); });
+  c2.globalAlpha=1;
+  g.nodes.forEach((nd,i)=>{ c2.fillStyle=`hsl(${160-nd.brightness*160},75%,${25+nd.arousal*40}%)`; c2.fillRect(x(i),base+6,bw+.5,100); });
+  if(playing){ c2.fillStyle=css('--fg'); c2.fillRect(x(cur)-1,base,3,112); }
+}
+draw();
+</script></main></body></html>

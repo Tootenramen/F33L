@@ -37,7 +37,13 @@ Music theory describes how tones, rhythm, pitch, key and timbre combine to produ
 - **People first.** The goal is to help people connect with music and with each other, not to replace listening.
 
 ## Status
-Day zero. This repo is the starting line: the question, the plan and the principles. Nothing here is validated yet.
+Early, working prototypes (all local; audio never leaves your machine; needs ffmpeg + numpy):
+- `src/listen.py`: a moment-by-moment "listening transcript" (loudness, brightness, rhythmic density, tempo, key guess per section).
+- `src/align.py`: lines up lyric timings (faster-whisper) with the energy curve. Outputs stay in the git-ignored `outputs/`; do not publish lyrics of copyrighted songs.
+- `src/jukebox.py` + `web/index.html`: a locally computed beat-similarity jump graph and a browser player that plays a song forever by jumping between beats that sound alike, with per-beat energy/brightness tags and a "stay in the feeling" mode. Inspired by the MIT-licensed Infinite/Eternal Jukebox (no Spotify API needed here).
+- `tests/`: synthetic-audio tests (known key, known tempo, known repeating structure). Run: `python -m unittest tests.test_listen`.
+
+Known limits: key detection is unreliable on rap/vocal-heavy music; tempo can be half/double; the per-beat "feeling" tags are simple energy/brightness proxies, not a validated emotion model; the browser player has not yet had a listening test on real tracks.
 
 ## Contributing
 Musicians, music theorists, psychologists, audio engineers and ML people are all welcome. Open an issue with a question, a paper, a dataset or a critique.
