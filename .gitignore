@@ -6,3 +6,4 @@ __pycache__/
 *.flac
 outputs/
 *.log
+!demo/demo.mp3
