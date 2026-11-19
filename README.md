@@ -36,7 +36,11 @@ you can steer a song by feeling. Everything runs in your browser. Your audio nev
 
 For your own listening only. Respect the service's terms and the artist's rights; do not redistribute. The helper listens on 127.0.0.1 only and accepts only https YouTube links.
 
+**Teach it what sounds right:** while a song plays, press **G** (that jump was smooth) or **B** (it was off), or use the buttons. Off jumps are removed so they can't play again. Export your labels as a small JSON file (no audio) and `node tools/tune.js f33l-labels.json` shows which measurements predict a bad cut.
+
 **Power users:** `node tools/make_graph.js song.mp3 out.json --ffmpeg ffmpeg` builds the same graph the page builds.
+
+Follow the work: [CHANGELOG](CHANGELOG.md) (versions) and [docs/DEVLOG.md](docs/DEVLOG.md) (what was measured, what failed).
 
 ## How the jumps are chosen
 Looping a song without it sounding broken is mostly about *where you cut*. F33L v2 does this:
