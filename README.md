@@ -10,6 +10,10 @@ you can steer a song by feeling. Everything runs in your browser. Your audio nev
 
 **Live demo:** https://tootenramen.github.io/F33L/ (plays an original track made for F33L; load your own song too)
 
+**How it works, with charts:** [docs/HOW_IT_WORKS.md](docs/HOW_IT_WORKS.md) (beat tracking, twin beats, the jump graph, what failed, and who else studies music emotion)
+
+[![How F33L finds twin beats](docs/img/04_similarity.png)](docs/HOW_IT_WORKS.md)
+
 <img src="docs/preview-v2.png" alt="F33L on a phone: the beat map, jump controls and feeling selector" width="300">
 
 ## What's inside
