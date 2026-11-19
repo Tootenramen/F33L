@@ -29,3 +29,11 @@ test('click track at 120 BPM is detected as about 120', async () => {
   for (let f = 1; f < frames; f++) { let s = 0; for (let k = 0; k < 1025; k++) s += Math.max(0, mag[f * 1025 + k] - mag[(f - 1) * 1025 + k]); flux[f] = s; }
   assert.ok(Math.abs(A.tempo(flux, fps) - 120) < 4);
 });
+
+test('tune.js finds the measurement that predicts bad jumps', () => {
+  const { fit } = require('../tools/tune.js'); let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const rows = Array.from({ length: 200 }, () => { const s = 0.5 + rnd() * 2, d = rnd() * 0.4, l = rnd() * 10; return { kind: s > 1.5 ? 'bad' : 'good', s, d, l }; });
+  const r = fit(rows);
+  assert.ok(r.weights.s > 0 && r.weights.s > Math.abs(r.weights.d) && r.weights.s > Math.abs(r.weights.l), JSON.stringify(r));
+  assert.ok(r.accuracy > 0.9, 'accuracy ' + r.accuracy);
+});
