@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="dark">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Cdefs%3E%3ClinearGradient id=%27g%27 x1=%270%27 x2=%271%27%3E%3Cstop offset=%270%27 stop-color=%27%23ff7ab8%27/%3E%3Cstop offset=%271%27 stop-color=%27%2322d3ee%27/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27url(%23g)%27/%3E%3C/svg%3E">
 <title>F33L: music that plays forever</title>
 <meta name="description" content="F33L plays any song forever by jumping between beats that sound alike, and tags every beat with how it feels. Runs in your browser. Your audio never leaves your device.">
 <style>
@@ -107,6 +108,13 @@ footer{margin-top:44px;color:var(--dim);font-size:.8rem}
       <label class="ctl">Feeling <select id="mode"><option value="any">any (classic)</option><option value="same">stay in the energy</option><option value="up">build up</option><option value="down">wind down</option></select></label>
       <div class="chips"><span class="chip" id="c1">0 beats</span><span class="chip" id="c2">0 jumps</span><span class="chip g" id="c3">idle</span></div>
     </div>
+    <div class="bar" id="fb" hidden>
+      <span class="ctl">Teach it what sounds right:</span>
+      <button id="fgood" class="btn sm" title="Shortcut: G">That jump was smooth</button>
+      <button id="fbad" class="btn sm" title="Shortcut: B">That jump was off</button>
+      <button id="fexp" class="btn sm" title="Download your labels as a small JSON file (no audio)">Export labels</button>
+      <span class="chip" id="c4">0 labeled</span>
+    </div>
     <div id="st" role="status" aria-live="polite">Load a song and its beat graph to begin.</div>
   </section>
   <footer>F33L is early research, not a finished product. Beat feeling tags are energy and brightness proxies, not a validated emotion model. Inspired by the MIT-licensed Infinite Jukebox.</footer>
@@ -115,7 +123,7 @@ footer{margin-top:44px;color:var(--dim);font-size:.8rem}
 <script>
 let ctx,buf,g,cur=0,playing=false,nextT=0,timer,jumps=0;
 const $=id=>document.getElementById(id),cv=$('cv'),c2=cv.getContext('2d'),root=document.documentElement;
-function ready(){const ok=!!(buf&&g);$('go').disabled=!ok;if(g){$('c1').textContent=g.beats+' beats';}
+function ready(){const ok=!!(buf&&g);$('go').disabled=!ok;$('fb').hidden=!ok;if(ok)loadLabels();if(g){$('c1').textContent=g.beats+' beats';}
   if(ok){$('st').textContent=`${g.edges.length} possible jumps at ${g.bpm} BPM. Press Play.`;}draw();}
 const setBusy=(t)=>{$('st').textContent=t;$('yts').textContent=t;};
 async function toMono22k(ab){const oc=new OfflineAudioContext(1,Math.ceil(ab.duration*22050),22050),sr=oc.createBufferSource();sr.buffer=ab;sr.connect(oc.destination);sr.start();return (await oc.startRendering()).getChannelData(0);}
@@ -149,7 +157,7 @@ async function loadDemo(){
     $('n1').textContent='demo.mp3 (original F33L demo)';$('d1').classList.add('ok');ready();}
   catch(err){$('st').textContent='Could not load the demo audio in this browser.';}}
 $('demo').onclick=loadDemo;if(location.search.includes('demo'))loadDemo();
-let since=0,master;const XF=0.02; // 20 ms crossfade at every beat edge (transparent when the audio is continuous)
+let since=0,master,recent=[],labels=[];const songKey=()=>(g?g.beats+'|'+Math.round((g.duration||0)*10):'');const XF=0.02; // 20 ms crossfade at every beat edge (transparent when the audio is continuous)
 function pick(i){
   const outs=g.out[i],sl=$('pj').value/100;
   // like the original: chance to jump starts low and grows the longer we have gone without one, so the song keeps its shape
@@ -157,7 +165,22 @@ function pick(i){
   if(!outs||Math.random()>=p){since++;return i+1;}
   const m=$('mode').value,a=g.nodes[i].arousal;
   const ok=outs.filter(j=>m==='any'||(m==='same'&&Math.abs(g.nodes[j].arousal-a)<.15)||(m==='up'&&g.nodes[j].arousal>=a)||(m==='down'&&g.nodes[j].arousal<=a));
-  if(!ok.length){since++;return i+1;}since=0;jumps++;return ok[Math.floor(Math.random()*ok.length)];}
+  if(!ok.length){since++;return i+1;}since=0;jumps++;const dest=ok[Math.floor(Math.random()*ok.length)];recent.push({a:i,b:dest,at:nextT});if(recent.length>20)recent.shift();return dest;}
+function loadLabels(){try{labels=JSON.parse(localStorage.getItem('f33l:'+songKey())||'[]');}catch(e){labels=[];}$('c4').textContent=labels.length+' labeled';}
+function saveLabels(){try{localStorage.setItem('f33l:'+songKey(),JSON.stringify(labels));}catch(e){}$('c4').textContent=labels.length+' labeled';}
+function label(kind){
+  const now=ctx.currentTime,j=[...recent].reverse().find(x=>x.at<=now+.05&&now-x.at<=8);
+  if(!j){$('st').textContent='No recent jump to label yet. Wait until you hear one.';return;}
+  const e=g.edges.find(x=>x.a===j.a&&x.b===j.b)||{};
+  labels.push({kind,a:j.a,b:j.b,d:e.d,s:e.s,l:e.l,mode:$('mode').value,when:Date.now()});
+  if(kind==='bad'){g.edges=g.edges.filter(x=>!(x.a===j.a&&x.b===j.b));g.out[j.a]=(g.out[j.a]||[]).filter(x=>x!==j.b);
+    $('st').textContent=`Removed that jump (beat ${j.a} to ${j.b}). ${g.edges.length} jumps left.`;}
+  else $('st').textContent='Marked smooth. Thank you.';
+  saveLabels();draw();}
+$('fbad').onclick=()=>label('bad');$('fgood').onclick=()=>label('good');
+addEventListener('keydown',e=>{if(!playing||/INPUT|SELECT|TEXTAREA/.test((e.target||{}).tagName))return;if(e.key==='b'||e.key==='B')label('bad');if(e.key==='g'||e.key==='G')label('good');});
+$('fexp').onclick=()=>{const blob=new Blob([JSON.stringify({engine:'v2',song:songKey(),bpm:g.bpm,labels},null,1)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='f33l-labels.json';a.click();};
 function sched(){
   const n=g.nodes.length,total=g.duration||buf.duration;
   while(playing&&nextT<ctx.currentTime+.3){
