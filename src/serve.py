@@ -48,6 +48,10 @@ class Handler(SimpleHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
+    def end_headers(self):
+        self.send_header("Cache-Control", "no-store")  # always serve the current page while developing locally
+        super().end_headers()
+
     def _json(self, code, obj):
         b = json.dumps(obj).encode()
         self.send_response(code); self.send_header("Content-Type", "application/json")
@@ -72,11 +76,12 @@ class Handler(SimpleHTTPRequestHandler):
             try:
                 run = cmd + ["--no-playlist", "--no-warnings", "-q", "-x", "--audio-format", "mp3", "--audio-quality", "5",
                              "--match-filter", f"duration<={MAX_SECONDS}", "--ffmpeg-location", FFMPEG,
-                             "-o", os.path.join(tmp, "a.%(ext)s"), "--print", "title", "--", url]
+                             "--no-simulate", "-o", os.path.join(tmp, "a.%(ext)s"), "--print", "title", "--", url]
                 r = subprocess.run(run, capture_output=True, text=True, timeout=240)
                 files = glob.glob(os.path.join(tmp, "a.mp3"))
                 if r.returncode != 0 or not files:
-                    return self._json(422, {"error": "Could not get audio (private, too long over 15 min, or blocked)."})
+                    tail = (r.stderr or "").strip().splitlines()[-1:] or [""]
+                    return self._json(422, {"error": "Could not get audio (private, over 15 min, or blocked). " + tail[0][:160]})
                 data = open(files[0], "rb").read()
                 self.send_response(200); self.send_header("Content-Type", "audio/mpeg")
                 self.send_header("Content-Length", str(len(data)))

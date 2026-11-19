@@ -94,7 +94,7 @@ footer{margin-top:44px;color:var(--dim);font-size:.8rem}
   <div class="loaders">
     <label class="glass drop" id="d1"><span class="n">1</span><span><b>Your song</b><small id="n1">Drop in an audio or video file (mp3, wav, m4a, mp4...)</small></span><input id="aud" type="file" accept="audio/*,video/*"></label>
     <div class="glass drop" id="d2" hidden><span class="n">2</span><span style="flex:1"><b>Or a YouTube link</b><small id="n2">Runs on your computer with the local helper</small>
-      <span class="yt"><input id="ytu" type="url" placeholder="https://www.youtube.com/watch?v=..." aria-label="YouTube link"><button id="ytb" class="btn pri sm">Loop it</button></span></span></div>
+      <span class="yt"><input id="ytu" type="url" placeholder="https://www.youtube.com/watch?v=..." aria-label="YouTube link"><button id="ytb" class="btn pri sm">Loop it</button></span><small id="yts" role="status" aria-live="polite" style="margin-top:8px"></small></span></div>
   </div>
   <p class="note" id="local" hidden></p>
 
@@ -117,7 +117,7 @@ let ctx,buf,g,cur=0,playing=false,nextT=0,timer,jumps=0;
 const $=id=>document.getElementById(id),cv=$('cv'),c2=cv.getContext('2d'),root=document.documentElement;
 function ready(){const ok=!!(buf&&g);$('go').disabled=!ok;if(g){$('c1').textContent=g.beats+' beats';}
   if(ok){$('st').textContent=`${g.edges.length} possible jumps at ${g.bpm} BPM. Press Play.`;}draw();}
-const setBusy=(t)=>{$('st').textContent=t;};
+const setBusy=(t)=>{$('st').textContent=t;$('yts').textContent=t;};
 async function toMono22k(ab){const oc=new OfflineAudioContext(1,Math.ceil(ab.duration*22050),22050),sr=oc.createBufferSource();sr.buffer=ab;sr.connect(oc.destination);sr.start();return (await oc.startRendering()).getChannelData(0);}
 async function useAudio(arrayBuffer,label){
   try{ctx=ctx||new AudioContext();setBusy('Decoding...');g=null;buf=await ctx.decodeAudioData(arrayBuffer);}
@@ -129,11 +129,11 @@ async function useAudio(arrayBuffer,label){
   catch(e){setBusy('Something went wrong analyzing that song.');}}
 $('aud').onchange=async e=>{const f=e.target.files[0];if(f)await useAudio(await f.arrayBuffer(),f.name);};
 async function ytLoop(){
-  const u=$('ytu').value.trim();if(!u)return;$('ytb').disabled=true;setBusy('Getting the audio on your computer... this can take a minute');
+  const u=$('ytu').value.trim();if(!u)return;$('ytb').disabled=true;$('ytb').textContent='Working...';setBusy('Getting the audio on your computer... this can take a minute');
   try{const r=await fetch('/api/yt?url='+encodeURIComponent(u),{headers:{'X-F33L':'1'}});
     if(!r.ok){setBusy((await r.json()).error||'That did not work.');return;}
     const title=decodeURIComponent(r.headers.get('X-Title')||'YouTube audio');await useAudio(await r.arrayBuffer(),title);}
-  catch(e){setBusy('Could not reach the local helper.');}finally{$('ytb').disabled=false;}}
+  catch(e){setBusy('Could not reach the local helper.');}finally{$('ytb').disabled=false;$('ytb').textContent='Loop it';}}
 $('ytb').onclick=ytLoop;$('ytu').addEventListener('keydown',e=>{if(e.key==='Enter')ytLoop();});
 (async()=>{const note=$('local');
   try{const h=await (await fetch('/api/health',{headers:{'X-F33L':'1'}})).json();
