@@ -10,7 +10,7 @@ you can steer a song by feeling. Everything runs in your browser. Your audio nev
 
 **Live demo:** https://tootenramen.github.io/F33L/ (plays an original track made for F33L; load your own song too)
 
-<img src="docs/preview.png" alt="F33L on a phone: the beat map, jump controls and feeling selector" width="320">
+<img src="docs/preview.png" alt="F33L on a phone: the beat map, jump controls and feeling selector" width="300">
 
 ## What's inside
 
