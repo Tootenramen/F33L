@@ -43,6 +43,7 @@ h1{margin:20px 0 0;font:700 clamp(3rem,10vw,6.4rem)/1 var(--disp);letter-spacing
 .note{margin:14px 0 0;font-size:.8rem;color:var(--dim)}
 
 .glass{position:relative;border-radius:22px;background:var(--glass);border:1px solid var(--line);-webkit-backdrop-filter:blur(18px) saturate(140%);backdrop-filter:blur(18px) saturate(140%);box-shadow:inset 0 1px 0 rgba(255,255,255,.09),0 24px 60px -24px rgba(0,0,0,.7)}
+.cta{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-top:28px}
 .loaders{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));margin-top:34px}
 .drop{display:flex;align-items:center;gap:14px;padding:18px 20px;cursor:pointer;transition:transform .25s var(--ease),border-color .3s}
 .drop:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--acc) 60%,transparent)}
@@ -86,6 +87,7 @@ footer{margin-top:44px;color:var(--dim);font-size:.8rem}
   <p class="lede">Play any song forever. It jumps between beats that sound alike, and every beat knows how it feels.</p>
   <p class="note">Runs in your browser. Your audio never leaves this page.</p>
 
+  <div class="cta"><button id="demo" class="btn pri">Try the demo song</button><span class="note" style="margin:0">An original track made for F33L. Or load your own below.</span></div>
   <div class="loaders">
     <label class="glass drop" id="d1"><span class="n">1</span><span><b>Audio file</b><small id="n1">Choose a song from your device</small></span><input id="aud" type="file" accept="audio/*"></label>
     <label class="glass drop" id="d2"><span class="n">2</span><span><b>Beat graph</b><small id="n2">graph.json made by jukebox.py</small></span><input id="grf" type="file" accept=".json"></label>
@@ -115,6 +117,15 @@ $('aud').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{ctx=ctx||
 $('grf').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{g=JSON.parse(await f.text());g.out={};
   g.edges.forEach(x=>(g.out[x.a]=g.out[x.a]||[]).push(x.b));$('n2').textContent=f.name;$('d2').classList.add('ok');ready();}
   catch(err){g=null;$('n2').textContent='That is not a valid graph.json';}};
+async function loadDemo(){
+  $('st').textContent='Loading the demo...';
+  try{g=await fetch('demo/graph.json').then(r=>r.json());g.out={};g.edges.forEach(x=>(g.out[x.a]=g.out[x.a]||[]).push(x.b));
+    $('n2').textContent='demo/graph.json';$('d2').classList.add('ok');$('c1').textContent=g.beats+' beats';$('st').textContent=g.edges.length+' possible jumps at '+g.bpm+' BPM. Loading audio...';draw();}
+  catch(err){$('st').textContent='The demo needs the website or a local server, not a file.';return;}
+  try{ctx=ctx||new AudioContext();buf=await ctx.decodeAudioData(await fetch('demo/demo.mp3').then(r=>r.arrayBuffer()));
+    $('n1').textContent='demo.mp3 (original F33L demo)';$('d1').classList.add('ok');ready();}
+  catch(err){$('st').textContent='Could not load the demo audio in this browser.';}}
+$('demo').onclick=loadDemo;if(location.search.includes('demo'))loadDemo();
 function pick(i){
   const outs=g.out[i];if(!outs||Math.random()*100>=$('pj').value)return i+1;
   const m=$('mode').value,a=g.nodes[i].arousal;

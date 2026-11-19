@@ -1,7 +1,7 @@
 """F33L jukebox v0: build a beat-similarity jump graph, computed locally (ideas from the MIT-licensed
 Infinite/Eternal Jukebox: beats described by timbre, pitch, loudness, position in bar; jump between similar beats).
 Differences: no Spotify API (everything from the audio file), and every beat carries a feeling tag.
-Usage: python jukebox.py song.mp3 --ffmpeg ffmpeg.exe --out web/graph.json
+Usage: python jukebox.py song.mp3 --ffmpeg ffmpeg.exe --out outputs/graph.json
 """
 import argparse, json, sys
 import numpy as np
@@ -100,7 +100,7 @@ def build(y, bpm=None, threshold=0.35):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("audio"); ap.add_argument("--ffmpeg", default="ffmpeg")
-    ap.add_argument("--out", default="web/graph.json"); ap.add_argument("--threshold", type=float, default=0.35)
+    ap.add_argument("--out", default="outputs/graph.json"); ap.add_argument("--threshold", type=float, default=0.35)
     a = ap.parse_args()
     g = build(L.decode(a.audio, a.ffmpeg), threshold=a.threshold)
     import os; os.makedirs(os.path.dirname(a.out) or ".", exist_ok=True)

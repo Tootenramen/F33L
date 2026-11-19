@@ -1,10 +1,33 @@
+[![F33L: play any song forever, and every beat knows how it feels](docs/hero.png)](https://tootenramen.github.io/F33L/)
+
 # F33L
 
-**An open experiment: can a computer learn how humans perceive and feel music?**
+**Play any song forever. It jumps between beats that sound alike, and every beat knows how it feels.**
 
-Music theory describes how tones, rhythm, pitch, key and timbre combine to produce a particular emotion in the human ear and brain. People can feel it. Software can measure it. F33L is the attempt to connect the two: to build an open system that lets AI models (language models, agents, analysis tools) *infer* the emotional experience of a piece of music, and then test those inferences against what real humans report.
+An open experiment: can a computer learn how humans perceive and feel music? F33L measures the sound (tempo, key, pitch,
+dynamics, texture), builds a map of which beats resemble each other, and tags every beat with its energy and brightness so
+you can steer a song by feeling. Everything runs in your browser. Your audio never leaves your device.
 
-> Honest framing: a model can read the structure of music and predict likely emotional effect. Whether that is "understanding" or "feeling" is the open question this project explores, not a claim it makes.
+**Live demo:** https://tootenramen.github.io/F33L/ (plays an original track made for F33L; load your own song too)
+
+<img src="docs/preview.png" alt="F33L on a phone: the beat map, jump controls and feeling selector" width="320">
+
+## What's inside
+
+| Path | What it is |
+|---|---|
+| `index.html` | the jukebox player: beat map, jump arcs, "stay in the feeling" modes |
+| `src/listen.py` | a moment-by-moment listening transcript for any song |
+| `src/jukebox.py` | builds the beat-similarity jump graph, locally |
+| `src/align.py` | lines up lyric timings with the energy curve |
+| `src/make_demo.py` | generates the original demo track and its graph |
+| `tests/` | synthetic-audio tests with known answers |
+| `docs/` | the roadmap and screenshots |
+
+## Use it
+1. Open the live demo and press **Try the demo song**, then **Play**.
+2. For your own song, run `python src/jukebox.py song.mp3 --ffmpeg ffmpeg --out graph.json` (needs Python, numpy and ffmpeg), then load the audio and `graph.json` on the page.
+3. Try **Feeling**: stay in the energy, build up, or wind down.
 
 ## The idea
 1. **Measure the sound.** Turn audio into interpretable features: tempo, meter, key and mode, chord motion, melodic contour, register, dynamics, spectral brightness, roughness, texture, silence.
@@ -40,10 +63,13 @@ Music theory describes how tones, rhythm, pitch, key and timbre combine to produ
 Early, working prototypes (all local; audio never leaves your machine; needs ffmpeg + numpy):
 - `src/listen.py`: a moment-by-moment "listening transcript" (loudness, brightness, rhythmic density, tempo, key guess per section).
 - `src/align.py`: lines up lyric timings (faster-whisper) with the energy curve. Outputs stay in the git-ignored `outputs/`; do not publish lyrics of copyrighted songs.
-- `src/jukebox.py` + `web/index.html`: a locally computed beat-similarity jump graph and a browser player that plays a song forever by jumping between beats that sound alike, with per-beat energy/brightness tags and a "stay in the feeling" mode. Inspired by the MIT-licensed Infinite/Eternal Jukebox (no Spotify API needed here).
+- `src/jukebox.py` + `index.html`: a locally computed beat-similarity jump graph and a browser player that plays a song forever by jumping between beats that sound alike, with per-beat energy/brightness tags and a "stay in the feeling" mode. Inspired by the MIT-licensed Infinite/Eternal Jukebox (no Spotify API needed here).
 - `tests/`: synthetic-audio tests (known key, known tempo, known repeating structure). Run: `python -m unittest tests.test_listen`.
 
 Known limits: key detection is unreliable on rap/vocal-heavy music; tempo can be half/double; the per-beat "feeling" tags are simple energy/brightness proxies, not a validated emotion model; the browser player has not yet had a listening test on real tracks.
 
 ## Contributing
 Musicians, music theorists, psychologists, audio engineers and ML people are all welcome. Open an issue with a question, a paper, a dataset or a critique.
+
+---
+Built by [Gustavo Freitas](https://github.com/Tootenramen) - [LinkedIn](https://www.linkedin.com/in/gustavo-freitas-69b93910b/) - [more projects](https://github.com/Tootenramen)
