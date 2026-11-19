@@ -67,3 +67,6 @@ The richer model won on all five held-out songs. The rap track went from 0.705 t
 Decision: ship both, **default stays the plain distance** (the version a listener already judged "better but not perfect"), and add a **Cut style** switch (smoothest / natural-learned) so a listener can A/B them. Labels record which style was playing, so the next fit can tell which one produces fewer "off" jumps. The model is `continuity_model.js` (77 weights, trained by `tools/continuity.js` on the five local tracks; no audio is stored in the repo).
 
 Caveats: five songs, one machine, negatives are random splices (some of which are fine), and the positive class is "ordinary beat edge", not "sounds good".
+
+## 2026-11-19 (later still): half/double-time control
+The tempo estimate can land on half or double the felt tempo on rap and vocal music (roadmap issue on this). Added a **Beat length** switch (auto / shorter / longer). On the rap track (smooth-jump share, same proxy as above): shorter beats (x2, 157 BPM, 706 beats) 86% of jumps <= p75 and 96% <= p90, with about twice as many jump options; auto (78 BPM) 86% / 93%; longer (x0.5) 78% / 87%. So shorter beats lose nothing on the proxy and give finer cut points; auto stays the default until a listener says which sounds better.

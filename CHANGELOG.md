@@ -4,6 +4,7 @@ All notable changes to F33L. Newest first. Versions are milestones; each links t
 ## v0.7.0 - 2026-11-19: learned cut scoring, switchable
 - **Cut style switch** in the player: *smoothest* (plain distance, default) or *natural (learned)*. Labels now record which style you heard.
 - **`continuity_model.js` + `tools/continuity.js`:** a small model trained to tell real beat edges from random splices. Leave-one-song-out on five tracks: mean AUC 0.817 to 0.868 (hard cases 0.774 to 0.838). My raw-difference proxy slightly prefers the plain distance, so it is opt-in until a listener decides. See DEVLOG.
+- **Beat length control** (auto / shorter / longer) to fix half- or double-time readings; rebuilds the map instantly.
 - `tools/make_graph.js --learned`; `tools/tune.js` also reads the learned score.
 
 ## v0.6.0 - 2026-11-19: teach it with your ears
