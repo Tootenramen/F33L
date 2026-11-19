@@ -1,64 +1,149 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>F33L jukebox</title>
+<meta name="color-scheme" content="dark">
+<title>F33L: music that plays forever</title>
+<meta name="description" content="F33L plays any song forever by jumping between beats that sound alike, and tags every beat with how it feels. Runs in your browser. Your audio never leaves your device.">
 <style>
-:root{--bg:#0b0d10;--fg:#e8eaed;--mut:#8a919b;--acc:#7cf5c8}
-@media (prefers-color-scheme:light){:root{--bg:#f6f7f9;--fg:#15181c;--mut:#5b6470;--acc:#0a8f6a}}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif;padding:16px}
-main{max-width:980px;margin:0 auto}h1{margin:.2em 0}p.s{color:var(--mut);margin-top:0}
-.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:12px 0}
-button,input,select{font:inherit;color:var(--fg);background:transparent;border:1px solid var(--mut);border-radius:8px;padding:8px 12px}
-button.p{background:var(--acc);color:#04130d;border-color:var(--acc);font-weight:600}
-canvas{width:100%;height:240px;border:1px solid var(--mut);border-radius:10px;display:block}
-#st{color:var(--mut);min-height:1.5em}label{color:var(--mut)}
-</style></head><body><main>
-<h1>F33L jukebox</h1>
-<p class="s">Plays a song forever by jumping between beats that sound alike. Your audio never leaves this page.</p>
-<div class="row">
- <label>1. Audio file <input id="aud" type="file" accept="audio/*"></label>
- <label>2. Graph (graph.json from <code>jukebox.py</code>) <input id="grf" type="file" accept=".json"></label>
-</div>
-<div class="row">
- <button id="go" class="p" disabled>Play</button>
- <label>Jump chance <input id="pj" type="range" min="0" max="100" value="40"></label>
- <label>Stay in the feeling
-  <select id="mode"><option value="any">any (classic)</option><option value="same">same energy</option><option value="up">build up</option><option value="down">wind down</option></select></label>
-</div>
-<canvas id="cv" width="1960" height="480"></canvas>
-<div id="st">Load an audio file and its graph.json.</div>
-<script>
-let ctx, buf, g, cur=0, playing=false, nextT=0, timer, played=0, jumps=0;
-const $=id=>document.getElementById(id), cv=$('cv'), c2=cv.getContext('2d');
-const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-function ready(){ $('go').disabled=!(buf&&g); if(buf&&g){$('st').textContent=`${g.beats} beats, ${g.edges.length} possible jumps. Press Play.`; draw();} }
-$('aud').onchange=async e=>{ctx=ctx||new AudioContext(); buf=await ctx.decodeAudioData(await e.target.files[0].arrayBuffer()); ready();};
-$('grf').onchange=async e=>{g=JSON.parse(await e.target.files[0].text()); g.out={}; g.edges.forEach(x=>(g.out[x.a]=g.out[x.a]||[]).push(x.b)); ready();};
-function pick(i){
-  const outs=g.out[i]; if(!outs||Math.random()*100>=$('pj').value) return i+1;
-  const m=$('mode').value, a=g.nodes[i].arousal;
-  const ok=outs.filter(j=>m==='any'||(m==='same'&&Math.abs(g.nodes[j].arousal-a)<.15)||(m==='up'&&g.nodes[j].arousal>=a)||(m==='down'&&g.nodes[j].arousal<=a));
-  if(!ok.length) return i+1; jumps++; return ok[Math.floor(Math.random()*ok.length)];
+:root{
+  --bg:#06070c;--ink:#f2f4fa;--mute:#a9b3cb;--dim:#7b86a3;--line:rgba(255,255,255,.12);
+  --glass:rgba(255,255,255,.045);--v:#8b7bff;--c:#22d3ee;--p:#ff6fb1;--g:#34e3b0;--a:#ffb86b;
+  --acc:var(--p);--grad:linear-gradient(100deg,#ff7ab8 0%,#9d8cff 48%,#22d3ee 100%);
+  --ease:cubic-bezier(.2,.8,.2,1);
+  --disp:'Space Grotesk',-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI',system-ui,sans-serif;
+  --body:'Inter',-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',system-ui,sans-serif;
+  --glow:0;
 }
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 1rem/1.6 var(--body);-webkit-font-smoothing:antialiased;overflow-x:hidden;min-height:100vh}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid #fff;outline-offset:3px;border-radius:10px;box-shadow:0 0 0 5px color-mix(in srgb,var(--acc) 55%,transparent)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* aurora (reacts to the music through --glow) */
+.aurora{position:fixed;inset:0;z-index:-1;overflow:hidden;background:radial-gradient(120% 80% at 50% -10%,#14112b 0%,#06070c 62%)}
+.blob{position:absolute;left:var(--x);top:var(--y);width:66vmax;height:66vmax;margin:-33vmax 0 0 -33vmax}
+.blob b{display:block;width:100%;height:100%;border-radius:50%;background:radial-gradient(circle,var(--col) 0,transparent 64%);filter:blur(64px);opacity:calc(.2 + var(--glow)*.22);transition:opacity .35s;animation:drift var(--t) ease-in-out infinite alternate}
+@keyframes drift{0%{transform:translate3d(-9%,-7%,0) scale(1) rotate(0)}100%{transform:translate3d(11%,9%,0) scale(1.2) rotate(50deg)}}
+.grain{position:absolute;inset:0;opacity:.035;mix-blend-mode:overlay;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+/* nav pill */
+.nav{position:fixed;z-index:20;top:12px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:4px;padding:5px;border-radius:999px;background:rgba(14,16,28,.62);border:1px solid var(--line);-webkit-backdrop-filter:blur(18px) saturate(150%);backdrop-filter:blur(18px) saturate(150%);box-shadow:0 10px 40px -10px #000}
+.brand{height:40px;padding:0 18px;border-radius:999px;display:grid;place-items:center;font:700 .92rem var(--disp);letter-spacing:.04em;color:#07080d;background:var(--grad)}
+.nav span.l{padding:9px 16px;font:500 .86rem var(--body);color:var(--mute)}
+
+.wrap{max-width:1100px;margin:0 auto;padding:clamp(96px,14vh,140px) clamp(16px,5vw,40px) 60px}
+.eyebrow{display:inline-flex;align-items:center;gap:10px;padding:7px 14px;border-radius:999px;font:500 .74rem var(--body);letter-spacing:.14em;text-transform:uppercase;color:#d3dbee;border:1px solid var(--line);background:var(--glass)}
+.eyebrow i{width:8px;height:8px;border-radius:50%;background:var(--acc);box-shadow:0 0 12px var(--acc);animation:pulse 2.4s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.35;transform:scale(.7)}}
+h1{margin:20px 0 0;font:700 clamp(3rem,10vw,6.4rem)/1 var(--disp);letter-spacing:-.045em}
+.gw{display:inline-block;background:var(--grad);background-size:260% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent;animation:shimmer 14s linear infinite;padding-bottom:.08em}
+@keyframes shimmer{from{background-position:0 0}to{background-position:-260% 0}}
+.lede{margin:20px 0 0;max-width:46ch;font:500 clamp(1.05rem,2.2vw,1.4rem)/1.45 var(--disp);color:#d9e0f0}
+.note{margin:14px 0 0;font-size:.8rem;color:var(--dim)}
+
+.glass{position:relative;border-radius:22px;background:var(--glass);border:1px solid var(--line);-webkit-backdrop-filter:blur(18px) saturate(140%);backdrop-filter:blur(18px) saturate(140%);box-shadow:inset 0 1px 0 rgba(255,255,255,.09),0 24px 60px -24px rgba(0,0,0,.7)}
+.loaders{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));margin-top:34px}
+.drop{display:flex;align-items:center;gap:14px;padding:18px 20px;cursor:pointer;transition:transform .25s var(--ease),border-color .3s}
+.drop:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--acc) 60%,transparent)}
+.drop .n{flex:none;width:38px;height:38px;border-radius:12px;display:grid;place-items:center;font:700 .95rem var(--disp);background:color-mix(in srgb,var(--acc) 18%,transparent);border:1px solid color-mix(in srgb,var(--acc) 40%,transparent)}
+.drop b{display:block;font:600 1rem var(--disp)}
+.drop small{display:block;color:var(--dim);font-size:.82rem;overflow-wrap:anywhere}
+.drop.ok .n{background:var(--g);color:#04130d;border-color:transparent}
+.drop input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
+
+.stage{margin-top:18px;padding:18px;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.09),0 24px 60px -24px rgba(0,0,0,.7),0 0 calc(30px + var(--glow)*70px) -10px color-mix(in srgb,var(--acc) calc(var(--glow)*70%),transparent);transition:box-shadow .25s}
+canvas{display:block;width:100%;height:clamp(180px,34vw,300px);border-radius:14px;background:rgba(5,6,12,.55)}
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:16px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:50px;padding:0 28px;border-radius:999px;font:600 .98rem var(--body);cursor:pointer;border:1px solid var(--line);background:rgba(255,255,255,.07);transition:transform .25s var(--ease),box-shadow .3s}
+.btn:hover{transform:translateY(-2px);box-shadow:0 12px 40px -8px color-mix(in srgb,var(--acc) 60%,transparent)}
+.btn.pri{color:#06070c;border-color:transparent;background:var(--grad)}
+.btn[disabled]{opacity:.4;pointer-events:none}
+.ctl{display:flex;align-items:center;gap:10px;color:var(--mute);font-size:.86rem}
+input[type=range]{accent-color:var(--acc);width:130px}
+select{background:rgba(255,255,255,.07);border:1px solid var(--line);border-radius:999px;padding:9px 14px;color:var(--ink)}
+select option{background:#10121c}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-left:auto}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:999px;font:600 .74rem var(--body);letter-spacing:.04em;border:1px solid var(--line);background:rgba(255,255,255,.06);color:#d6deef;white-space:nowrap}
+.chip.g{color:var(--g);border-color:color-mix(in srgb,var(--g) 45%,transparent);background:color-mix(in srgb,var(--g) 12%,transparent)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;margin:14px 2px 0;color:var(--dim);font-size:.78rem}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+#st{min-height:1.5em;margin-top:10px;color:var(--mute);font-size:.9rem}
+footer{margin-top:44px;color:var(--dim);font-size:.8rem}
+@media(max-width:560px){.chips{margin-left:0}.nav span.l{display:none}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style></head><body>
+<div class="aurora" aria-hidden="true">
+  <div class="blob" style="--x:18%;--y:12%;--col:#ff6fb1;--t:23s"><b></b></div>
+  <div class="blob" style="--x:84%;--y:22%;--col:#22d3ee;--t:29s"><b></b></div>
+  <div class="blob" style="--x:56%;--y:92%;--col:#8b7bff;--t:26s"><b></b></div>
+  <div class="grain"></div>
+</div>
+<nav class="nav" aria-label="F33L"><span class="brand">F33L</span><span class="l">the jukebox</span></nav>
+<main class="wrap">
+  <span class="eyebrow"><i></i>An open experiment in feeling</span>
+  <h1><span class="gw">F33L</span></h1>
+  <p class="lede">Play any song forever. It jumps between beats that sound alike, and every beat knows how it feels.</p>
+  <p class="note">Runs in your browser. Your audio never leaves this page.</p>
+
+  <div class="loaders">
+    <label class="glass drop" id="d1"><span class="n">1</span><span><b>Audio file</b><small id="n1">Choose a song from your device</small></span><input id="aud" type="file" accept="audio/*"></label>
+    <label class="glass drop" id="d2"><span class="n">2</span><span><b>Beat graph</b><small id="n2">graph.json made by jukebox.py</small></span><input id="grf" type="file" accept=".json"></label>
+  </div>
+
+  <section class="glass stage" aria-label="Player">
+    <canvas id="cv" width="2000" height="600" role="img" aria-label="Beat map: colored blocks are beats, arcs are possible jumps"></canvas>
+    <div class="legend" aria-hidden="true"><span><i style="background:hsl(195 70% 26%)"></i>calm and dark</span><span><i style="background:hsl(335 70% 60%)"></i>loud and bright</span><span>arcs: where it can jump</span></div>
+    <div class="bar">
+      <button id="go" class="btn pri" disabled>Play</button>
+      <label class="ctl">Jump chance <input id="pj" type="range" min="0" max="100" value="40"></label>
+      <label class="ctl">Feeling <select id="mode"><option value="any">any (classic)</option><option value="same">stay in the energy</option><option value="up">build up</option><option value="down">wind down</option></select></label>
+      <div class="chips"><span class="chip" id="c1">0 beats</span><span class="chip" id="c2">0 jumps</span><span class="chip g" id="c3">idle</span></div>
+    </div>
+    <div id="st" role="status" aria-live="polite">Load a song and its beat graph to begin.</div>
+  </section>
+  <footer>F33L is early research, not a finished product. Beat feeling tags are energy and brightness proxies, not a validated emotion model. Inspired by the MIT-licensed Infinite Jukebox.</footer>
+</main>
+<script>
+let ctx,buf,g,cur=0,playing=false,nextT=0,timer,jumps=0;
+const $=id=>document.getElementById(id),cv=$('cv'),c2=cv.getContext('2d'),root=document.documentElement;
+function ready(){const ok=!!(buf&&g);$('go').disabled=!ok;if(g){$('c1').textContent=g.beats+' beats';}
+  if(ok){$('st').textContent=`${g.edges.length} possible jumps at ${g.bpm} BPM. Press Play.`;}draw();}
+$('aud').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{ctx=ctx||new AudioContext();
+  $('n1').textContent='Decoding...';buf=await ctx.decodeAudioData(await f.arrayBuffer());$('n1').textContent=f.name;$('d1').classList.add('ok');ready();}
+  catch(err){$('n1').textContent='Could not read that audio file';}};
+$('grf').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{g=JSON.parse(await f.text());g.out={};
+  g.edges.forEach(x=>(g.out[x.a]=g.out[x.a]||[]).push(x.b));$('n2').textContent=f.name;$('d2').classList.add('ok');ready();}
+  catch(err){g=null;$('n2').textContent='That is not a valid graph.json';}};
+function pick(i){
+  const outs=g.out[i];if(!outs||Math.random()*100>=$('pj').value)return i+1;
+  const m=$('mode').value,a=g.nodes[i].arousal;
+  const ok=outs.filter(j=>m==='any'||(m==='same'&&Math.abs(g.nodes[j].arousal-a)<.15)||(m==='up'&&g.nodes[j].arousal>=a)||(m==='down'&&g.nodes[j].arousal<=a));
+  if(!ok.length)return i+1;jumps++;return ok[Math.floor(Math.random()*ok.length)];}
 function sched(){
   while(playing&&nextT<ctx.currentTime+.25){
-    if(cur>=g.nodes.length-1) cur=0;
-    const t0=g.nodes[cur].t, t1=g.nodes[cur+1].t, s=ctx.createBufferSource();
-    s.buffer=buf; s.connect(ctx.destination); s.start(nextT,t0,t1-t0);
-    nextT+=t1-t0; played++; cur=pick(cur);
-    $('st').textContent=`beat ${cur}/${g.beats}  jumps so far: ${jumps}`;
-  }
-  draw(); }
-$('go').onclick=()=>{ if(playing){playing=false;clearInterval(timer);$('go').textContent='Play';return;}
-  ctx.resume(); playing=true; nextT=ctx.currentTime+.05; cur=0; $('go').textContent='Stop'; timer=setInterval(sched,40); };
+    if(cur>=g.nodes.length-1)cur=0;
+    const t0=g.nodes[cur].t,t1=g.nodes[cur+1].t,s=ctx.createBufferSource();
+    s.buffer=buf;s.connect(ctx.destination);s.start(nextT,t0,t1-t0);
+    root.style.setProperty('--glow',g.nodes[cur].arousal.toFixed(2));
+    nextT+=t1-t0;cur=pick(cur);
+    $('c2').textContent=jumps+' jumps';$('st').textContent=`Beat ${cur} of ${g.beats}`;}
+  draw();}
+$('go').onclick=()=>{
+  if(playing){playing=false;clearInterval(timer);$('go').textContent='Play';$('c3').textContent='paused';root.style.setProperty('--glow',0);return;}
+  ctx.resume();playing=true;nextT=ctx.currentTime+.05;cur=0;jumps=0;$('go').textContent='Stop';$('c3').textContent='playing';timer=setInterval(sched,40);};
 function draw(){
-  if(!g) return; const W=cv.width,H=cv.height,n=g.nodes.length; c2.clearRect(0,0,W,H);
-  const x=i=>10+(W-20)*i/n, base=H-120, bw=Math.max(1,(W-20)/n);
-  c2.strokeStyle=css('--mut'); c2.globalAlpha=.12; c2.lineWidth=1;
-  g.edges.forEach(e=>{ if(Math.abs(e.a-e.b)<8) return; c2.beginPath(); c2.moveTo(x(e.a),base);
-    c2.quadraticCurveTo((x(e.a)+x(e.b))/2, base-Math.min(base-10,Math.abs(e.a-e.b)*(H/n)*.9), x(e.b), base); c2.stroke(); });
-  c2.globalAlpha=1;
-  g.nodes.forEach((nd,i)=>{ c2.fillStyle=`hsl(${160-nd.brightness*160},75%,${25+nd.arousal*40}%)`; c2.fillRect(x(i),base+6,bw+.5,100); });
-  if(playing){ c2.fillStyle=css('--fg'); c2.fillRect(x(cur)-1,base,3,112); }
+  const W=cv.width,H=cv.height;c2.clearRect(0,0,W,H);
+  if(!g){c2.fillStyle='rgba(169,179,203,.5)';c2.font='500 30px system-ui';c2.textAlign='center';c2.fillText('Your song will appear here as a map of beats',W/2,H/2);return;}
+  const n=g.nodes.length,x=i=>24+(W-48)*i/n,base=H-150,bw=Math.max(1.2,(W-48)/n);
+  c2.lineWidth=2;
+  g.edges.forEach(e=>{if(Math.abs(e.a-e.b)<8)return;const s=1-Math.min(1,e.d/.4);
+    c2.strokeStyle=`rgba(180,160,255,${.05+s*.14})`;c2.beginPath();c2.moveTo(x(e.a),base);
+    c2.quadraticCurveTo((x(e.a)+x(e.b))/2,base-Math.min(base-16,Math.abs(e.a-e.b)*(base/n)*1.7),x(e.b),base);c2.stroke();});
+  g.nodes.forEach((nd,i)=>{c2.fillStyle=`hsl(${195+nd.brightness*140},70%,${22+nd.arousal*44}%)`;
+    c2.fillRect(x(i),base+10,bw+.6,130);});
+  if(playing){const px=x(cur);const gr=c2.createLinearGradient(0,base-10,0,base+150);gr.addColorStop(0,'#ff7ab8');gr.addColorStop(1,'#22d3ee');
+    c2.fillStyle=gr;c2.fillRect(px-2,base-10,4,160);}
 }
 draw();
-</script></main></body></html>
+</script></body></html>
