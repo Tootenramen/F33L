@@ -118,6 +118,7 @@
       if (f > 0) { let fl = 0; const p = m - BINS; for (let k = 0; k < BINS; k++) { const d = mag[m + k] - mag[p + k]; if (d > 0) fl += d; } flux[f] = fl; }
     }
     let bpm = opts.bpm || tempo(flux, fps); while (bpm < 70) bpm *= 2; while (bpm > 160) bpm /= 2;
+    bpm *= opts.bpmScale || 1;   // 2 = twice as many (shorter) beats, 0.5 = half; lets a listener fix half/double-time readings
     const dur = y.length / SR;
     let times = trackBeats(flux, fps, bpm).map(frameCenter);
     times = snapToOnsets(y, times);
