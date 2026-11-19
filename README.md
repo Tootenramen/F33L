@@ -16,7 +16,9 @@ you can steer a song by feeling. Everything runs in your browser. Your audio nev
 
 | Path | What it is |
 |---|---|
-| `index.html` | the jukebox player: beat map, jump arcs, "stay in the feeling" modes |
+| `index.html` | the jukebox player: drop a song, beat map, jump arcs, "stay in the feeling" modes |
+| `analyze.js` | the in-browser listener: builds the beat graph from any audio (port of `jukebox.py`) |
+| `src/serve.py` | optional local helper for YouTube links (127.0.0.1 only) |
 | `src/listen.py` | a moment-by-moment listening transcript for any song |
 | `src/jukebox.py` | builds the beat-similarity jump graph, locally |
 | `src/align.py` | lines up lyric timings with the energy curve |
@@ -25,9 +27,16 @@ you can steer a song by feeling. Everything runs in your browser. Your audio nev
 | `docs/` | the roadmap and screenshots |
 
 ## Use it
-1. Open the live demo and press **Try the demo song**, then **Play**.
-2. For your own song, run `python src/jukebox.py song.mp3 --ffmpeg ffmpeg --out graph.json` (needs Python, numpy and ffmpeg), then load the audio and `graph.json` on the page.
-3. Try **Feeling**: stay in the energy, build up, or wind down.
+**On the website:** press **Try the demo song**, or drop in your own audio or video file (mp3, wav, m4a, mp4...). F33L listens to the song right in your browser (a few seconds), builds the beat map, and loops it forever. Nothing is uploaded.
+
+**Loop a YouTube link (local only):** the public site cannot fetch videos, so this runs on your own computer.
+1. Install Python, ffmpeg and yt-dlp (`winget install yt-dlp`, or `pip install yt-dlp`).
+2. Run `python src/serve.py` and open http://127.0.0.1:8765/ (the helper prints the address; use `--port` if that one is taken).
+3. Paste a link and press **Loop it**. The audio is fetched to a temporary file on your machine, analyzed in the page, then deleted.
+
+For your own listening only. Respect the service's terms and the artist's rights; do not redistribute. The helper listens on 127.0.0.1 only and accepts only https YouTube links.
+
+**Power users:** `python src/jukebox.py song.mp3 --ffmpeg ffmpeg` builds the same graph in Python (it matches the browser version edge for edge).
 
 ## The idea
 1. **Measure the sound.** Turn audio into interpretable features: tempo, meter, key and mode, chord motion, melodic contour, register, dynamics, spectral brightness, roughness, texture, silence.
@@ -64,7 +73,7 @@ Early, working prototypes (all local; audio never leaves your machine; needs ffm
 - `src/listen.py`: a moment-by-moment "listening transcript" (loudness, brightness, rhythmic density, tempo, key guess per section).
 - `src/align.py`: lines up lyric timings (faster-whisper) with the energy curve. Outputs stay in the git-ignored `outputs/`; do not publish lyrics of copyrighted songs.
 - `src/jukebox.py` + `index.html`: a locally computed beat-similarity jump graph and a browser player that plays a song forever by jumping between beats that sound alike, with per-beat energy/brightness tags and a "stay in the feeling" mode. Inspired by the MIT-licensed Infinite/Eternal Jukebox (no Spotify API needed here).
-- `tests/`: synthetic-audio tests (known key, known tempo, known repeating structure). Run: `python -m unittest tests.test_listen`.
+- `tests/`: synthetic-audio tests (known key, known tempo, known repeating structure). Run: `python -m unittest discover tests` and `node --test tests/analyze.test.js`.
 
 Known limits: key detection is unreliable on rap/vocal-heavy music; tempo can be half/double; the per-beat "feeling" tags are simple energy/brightness proxies, not a validated emotion model; the browser player has not yet had a listening test on real tracks.
 

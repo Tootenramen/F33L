@@ -51,7 +51,10 @@ h1{margin:20px 0 0;font:700 clamp(3rem,10vw,6.4rem)/1 var(--disp);letter-spacing
 .drop b{display:block;font:600 1rem var(--disp)}
 .drop small{display:block;color:var(--dim);font-size:.82rem;overflow-wrap:anywhere}
 .drop.ok .n{background:var(--g);color:#04130d;border-color:transparent}
-.drop input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
+.drop input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
+.yt{display:flex;gap:8px;margin-top:8px}.yt input{flex:1;min-width:0;background:rgba(255,255,255,.07);border:1px solid var(--line);border-radius:999px;padding:10px 16px;color:var(--ink)}
+.btn.sm{min-height:42px;padding:0 20px;font-size:.9rem}
+[hidden]{display:none!important}
 
 .stage{margin-top:18px;padding:18px;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.09),0 24px 60px -24px rgba(0,0,0,.7),0 0 calc(30px + var(--glow)*70px) -10px color-mix(in srgb,var(--acc) calc(var(--glow)*70%),transparent);transition:box-shadow .25s}
 canvas{display:block;width:100%;height:clamp(180px,34vw,300px);border-radius:14px;background:rgba(5,6,12,.55)}
@@ -89,9 +92,11 @@ footer{margin-top:44px;color:var(--dim);font-size:.8rem}
 
   <div class="cta"><button id="demo" class="btn pri">Try the demo song</button><span class="note" style="margin:0">An original track made for F33L. Or load your own below.</span></div>
   <div class="loaders">
-    <label class="glass drop" id="d1"><span class="n">1</span><span><b>Audio file</b><small id="n1">Choose a song from your device</small></span><input id="aud" type="file" accept="audio/*"></label>
-    <label class="glass drop" id="d2"><span class="n">2</span><span><b>Beat graph</b><small id="n2">graph.json made by jukebox.py</small></span><input id="grf" type="file" accept=".json"></label>
+    <label class="glass drop" id="d1"><span class="n">1</span><span><b>Your song</b><small id="n1">Drop in an audio or video file (mp3, wav, m4a, mp4...)</small></span><input id="aud" type="file" accept="audio/*,video/*"></label>
+    <div class="glass drop" id="d2" hidden><span class="n">2</span><span style="flex:1"><b>Or a YouTube link</b><small id="n2">Runs on your computer with the local helper</small>
+      <span class="yt"><input id="ytu" type="url" placeholder="https://www.youtube.com/watch?v=..." aria-label="YouTube link"><button id="ytb" class="btn pri sm">Loop it</button></span></span></div>
   </div>
+  <p class="note" id="local" hidden></p>
 
   <section class="glass stage" aria-label="Player">
     <canvas id="cv" width="2000" height="600" role="img" aria-label="Beat map: colored blocks are beats, arcs are possible jumps"></canvas>
@@ -106,21 +111,39 @@ footer{margin-top:44px;color:var(--dim);font-size:.8rem}
   </section>
   <footer>F33L is early research, not a finished product. Beat feeling tags are energy and brightness proxies, not a validated emotion model. Inspired by the MIT-licensed Infinite Jukebox.</footer>
 </main>
+<script src="analyze.js"></script>
 <script>
 let ctx,buf,g,cur=0,playing=false,nextT=0,timer,jumps=0;
 const $=id=>document.getElementById(id),cv=$('cv'),c2=cv.getContext('2d'),root=document.documentElement;
 function ready(){const ok=!!(buf&&g);$('go').disabled=!ok;if(g){$('c1').textContent=g.beats+' beats';}
   if(ok){$('st').textContent=`${g.edges.length} possible jumps at ${g.bpm} BPM. Press Play.`;}draw();}
-$('aud').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{ctx=ctx||new AudioContext();
-  $('n1').textContent='Decoding...';buf=await ctx.decodeAudioData(await f.arrayBuffer());$('n1').textContent=f.name;$('d1').classList.add('ok');ready();}
-  catch(err){$('n1').textContent='Could not read that audio file';}};
-$('grf').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{g=JSON.parse(await f.text());g.out={};
-  g.edges.forEach(x=>(g.out[x.a]=g.out[x.a]||[]).push(x.b));$('n2').textContent=f.name;$('d2').classList.add('ok');ready();}
-  catch(err){g=null;$('n2').textContent='That is not a valid graph.json';}};
+const setBusy=(t)=>{$('st').textContent=t;};
+async function toMono22k(ab){const oc=new OfflineAudioContext(1,Math.ceil(ab.duration*22050),22050),sr=oc.createBufferSource();sr.buffer=ab;sr.connect(oc.destination);sr.start();return (await oc.startRendering()).getChannelData(0);}
+async function useAudio(arrayBuffer,label){
+  try{ctx=ctx||new AudioContext();setBusy('Decoding...');g=null;buf=await ctx.decodeAudioData(arrayBuffer);}
+  catch(e){$('n1').textContent='Could not read that file. Try an mp3, wav or m4a.';setBusy('');return;}
+  $('n1').textContent=label;$('d1').classList.add('ok');
+  try{const y=await toMono22k(buf);setBusy('Listening to the song...');
+    g=await F33LAnalyze.build(y,{onProgress:p=>setBusy('Listening to the song... '+Math.round(p*100)+'%')});
+    g.out={};g.edges.forEach(x=>(g.out[x.a]=g.out[x.a]||[]).push(x.b));ready();}
+  catch(e){setBusy('Something went wrong analyzing that song.');}}
+$('aud').onchange=async e=>{const f=e.target.files[0];if(f)await useAudio(await f.arrayBuffer(),f.name);};
+async function ytLoop(){
+  const u=$('ytu').value.trim();if(!u)return;$('ytb').disabled=true;setBusy('Getting the audio on your computer... this can take a minute');
+  try{const r=await fetch('/api/yt?url='+encodeURIComponent(u),{headers:{'X-F33L':'1'}});
+    if(!r.ok){setBusy((await r.json()).error||'That did not work.');return;}
+    const title=decodeURIComponent(r.headers.get('X-Title')||'YouTube audio');await useAudio(await r.arrayBuffer(),title);}
+  catch(e){setBusy('Could not reach the local helper.');}finally{$('ytb').disabled=false;}}
+$('ytb').onclick=ytLoop;$('ytu').addEventListener('keydown',e=>{if(e.key==='Enter')ytLoop();});
+(async()=>{const note=$('local');
+  try{const h=await (await fetch('/api/health',{headers:{'X-F33L':'1'}})).json();
+    if(h&&h.ok){$('d2').hidden=false;if(!h.youtube){$('n2').textContent='Install yt-dlp to turn this on: winget install yt-dlp';$('ytu').disabled=true;$('ytb').disabled=true;}
+      note.hidden=false;note.textContent='For your own listening. Please respect the service terms and the artist.';}}
+  catch(e){note.hidden=false;note.textContent='Want to loop a YouTube link? Run the local helper: python src/serve.py (see the README).';}})();
 async function loadDemo(){
   $('st').textContent='Loading the demo...';
   try{g=await fetch('demo/graph.json').then(r=>r.json());g.out={};g.edges.forEach(x=>(g.out[x.a]=g.out[x.a]||[]).push(x.b));
-    $('n2').textContent='demo/graph.json';$('d2').classList.add('ok');$('c1').textContent=g.beats+' beats';$('st').textContent=g.edges.length+' possible jumps at '+g.bpm+' BPM. Loading audio...';draw();}
+    $('c1').textContent=g.beats+' beats';$('st').textContent=g.edges.length+' possible jumps at '+g.bpm+' BPM. Loading audio...';draw();}
   catch(err){$('st').textContent='The demo needs the website or a local server, not a file.';return;}
   try{ctx=ctx||new AudioContext();buf=await ctx.decodeAudioData(await fetch('demo/demo.mp3').then(r=>r.arrayBuffer()));
     $('n1').textContent='demo.mp3 (original F33L demo)';$('d1').classList.add('ok');ready();}
