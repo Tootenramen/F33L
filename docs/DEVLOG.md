@@ -49,3 +49,21 @@ The local helper never downloaded: yt-dlp treats `--print` as a dry run unless `
 - Collect labels across several songs and fit the cost weights.
 - Vocal-aware cuts: prefer cutting in gaps or at word starts.
 - Better timbre features, a tuning panel (threshold, delete jumps), and an accuracy comparison with the original on shared songs.
+
+## 2026-11-19 (later): learning what a natural cut sounds like
+Idea: real beat boundaries in a song are examples of continuity, and random splices are examples of breaks. Train a model on the difference between the sound just before and just after a cut, then use it to score candidate jumps. Tested **leave-one-song-out** on five different tracks (a rap track, two ambient/electronic pieces, a children's TV album and a lullaby; 4 minutes each), so the model never saw the song it was scored on. Metric: AUC of separating random splices from ordinary beat edges (0.5 = chance).
+
+| feature set | mean AUC, all splices | mean AUC, hard cases only* |
+|---|---|---|
+| plain Euclidean distance (what v0.5/v0.6 use) | 0.817 | 0.774 |
+| learned, absolute band differences | 0.834 | 0.795 |
+| learned, adds direction, loudness level and signed band change | **0.868** | **0.838** |
+
+*hard cases: only splices the plain distance already thinks are fairly smooth, which is the regime the engine picks from.
+The richer model won on all five held-out songs. The rap track went from 0.705 to 0.814.
+
+**But the two proxies disagree.** When I rebuilt the rap track with a model that never saw it and re-ran `tools/splice_metric.py` (raw spectral/loudness difference across the cut), the learned ranking scored *slightly lower* than the plain-distance ranking: 83% vs 86% of jumps as smooth as a normal beat edge (demo: 69% vs 73%). Plausible reason: that metric rewards the smallest difference, while real beat edges at drum hits legitimately differ a lot, and the learned model has learned that. Neither proxy is ears.
+
+Decision: ship both, **default stays the plain distance** (the version a listener already judged "better but not perfect"), and add a **Cut style** switch (smoothest / natural-learned) so a listener can A/B them. Labels record which style was playing, so the next fit can tell which one produces fewer "off" jumps. The model is `continuity_model.js` (77 weights, trained by `tools/continuity.js` on the five local tracks; no audio is stored in the repo).
+
+Caveats: five songs, one machine, negatives are random splices (some of which are fine), and the positive class is "ordinary beat edge", not "sounds good".
