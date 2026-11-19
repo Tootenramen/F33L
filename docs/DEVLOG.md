@@ -70,3 +70,11 @@ Caveats: five songs, one machine, negatives are random splices (some of which ar
 
 ## 2026-11-19 (later still): half/double-time control
 The tempo estimate can land on half or double the felt tempo on rap and vocal music (roadmap issue on this). Added a **Beat length** switch (auto / shorter / longer). On the rap track (smooth-jump share, same proxy as above): shorter beats (x2, 157 BPM, 706 beats) 86% of jumps <= p75 and 96% <= p90, with about twice as many jump options; auto (78 BPM) 86% / 93%; longer (x0.5) 78% / 87%. So shorter beats lose nothing on the proxy and give finer cut points; auto stays the default until a listener says which sounds better.
+
+## Mid-word cuts, measured (first look)
+Word timestamps (faster-whisper base, tools/words.py) + tools/midword.js on Revenge (dense rap, first 240 s, 966 words).
+A cut is "mid-word" if it is >40 ms inside a word. Result: 73% of ordinary beat boundaries already fall inside a word;
+jumps land mid-word at the same rate (source 74%, landing 68-71%, either end 89%) in BOTH distance and learned modes.
+Meaning: the engine is currently blind to words, as suspected; on rap almost any beat cut is mid-word, so it needs a
+vocal-aware term. An oracle that only takes gap-to-gap jumps would leave ~11% of edges, so there is room. Next: an
+audio-only proxy for "this boundary is in a word gap" (voice-band level at the cut), validated against these labels.
