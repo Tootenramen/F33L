@@ -86,7 +86,16 @@
     return out;
   }
 
+  // features describing a cut: how the sound just before it (tail) differs from the sound just after it (head)
+  function pairFeatures(t, h, dbT, dbH) {
+    const v = []; for (let j = 0; j < t.length; j++) v.push(Math.abs(t[j] - h[j]));
+    v.push(Math.abs(dbT - dbH), dbH - dbT, dbT, dbH, Math.max(0, dbH - dbT));
+    for (let j = 0; j < t.length; j++) v.push(h[j] - t[j]);   // signed, so the model knows the direction of the change
+    return v;
+  }
+  function modelScore(M, x) { let z = M.b; for (let j = 0; j < x.length; j++) z += ((x[j] - M.mu[j]) / M.sd[j]) * M.w[j]; return z; } // higher = more likely a break
   async function build(y, opts = {}) {
+    const MODEL = opts.model || null;   // pass the continuity model explicitly (window.F33LModel / require('./continuity_model.js')) to use learned cut scoring
     const onProgress = opts.onProgress || (() => {}), topk = opts.topk ?? 4, bar = 4, minGap = opts.minGap ?? 8;
     const maxRatio = opts.maxRatio ?? 1.7, fps = SR / HOP;
     const { mag, frames } = await stftMag(y, p => onProgress(p * 0.7));
@@ -142,20 +151,26 @@
     const beatDist = (a, b) => beatDist0(a, b) + ((a % bar) !== (b % bar) ? 0.15 : 0) + (hist && a > 0 && b > 0 ? hist * beatDist0(a - 1, b - 1) : 0);
     // candidate jumps: after beat a, continue at beat `dest`
     const cand = [], all = [];
+    let natZ = [], cutZ = Infinity;
+    if (MODEL) { for (let j = 1; j < nB; j++) natZ.push(modelScore(MODEL, pairFeatures(tail[j], head[j], dbTail[j], dbHead[j]))); cutZ = percentile(natZ, 90); }
     for (let a = 0; a < nB - 1; a++) for (let dest = 1; dest < nB; dest++) {
       if (Math.abs(dest - (a + 1)) < minGap) continue;
       const bd = beatDist(a, dest - 1), ratio = dv(tail[a + 1], head[dest]) / natMed;
-      cand.push([a, dest, bd, ratio]); all.push(bd);
+      const z = MODEL ? modelScore(MODEL, pairFeatures(tail[a + 1], head[dest], dbTail[a + 1], dbHead[dest])) : 0;
+      cand.push([a, dest, bd, ratio, z]); all.push(bd);
     }
     const bdCut = Math.min(0.35 * (1 + (opts.history ?? 0)), percentile(all, 4)), edges = [], byA = new Map();
-    for (const c of cand) if (c[2] <= bdCut && c[3] <= maxRatio) { if (!byA.has(c[0])) byA.set(c[0], []); byA.get(c[0]).push(c); }
-    for (const [a, list] of byA) { list.sort((p, q) => (p[3] + 3 * p[2]) - (q[3] + 3 * q[2])); for (const c of list.slice(0, topk)) edges.push({ a, b: c[1], d: +c[2].toFixed(3), s: +c[3].toFixed(2), l: +Math.abs(dbTail[a + 1] - dbHead[c[1]]).toFixed(1) }); }
+    const smooth = c => (MODEL ? c[4] <= cutZ : c[3] <= maxRatio), rank = c => (MODEL ? c[4] + 6 * c[2] : c[3] + 3 * c[2]);
+    for (const c of cand) if (c[2] <= bdCut && smooth(c)) { if (!byA.has(c[0])) byA.set(c[0], []); byA.get(c[0]).push(c); }
+    for (const [a, list] of byA) { list.sort((p, q) => rank(p) - rank(q)); for (const c of list.slice(0, topk)) edges.push({ a, b: c[1], d: +c[2].toFixed(3), s: +c[3].toFixed(2), z: +c[4].toFixed(2), l: +Math.abs(dbTail[a + 1] - dbHead[c[1]]).toFixed(1) }); }
     const d10 = percentile(D, 10), d90 = percentile(D, 90), c10 = percentile(CE, 10), c90 = percentile(CE, 90), clip = x => Math.max(0, Math.min(1, x));
     const nodes = times.map((t, i) => ({ i, t: +t.toFixed(3), arousal: +clip((D[i] - d10) / (d90 - d10 + 1e-9)).toFixed(2), brightness: +clip((CE[i] - c10) / (c90 - c10 + 1e-9)).toFixed(2) }));
     onProgress(1);
-    return { bpm: +bpm.toFixed(1), beats: nB, duration: +dur.toFixed(3), naturalCost: +natMed.toFixed(3), nodes, edges };
+    const res = { bpm: +bpm.toFixed(1), beats: nB, duration: +dur.toFixed(3), naturalCost: +natMed.toFixed(3), nodes, edges };
+    if (opts.debug) res._internals = { tail, head, dbTail, dbHead, MEL };   // for tools/continuity.js (training experiments)
+    return res;
   }
 
-  const api = { SR, build, stftMag, tempo, trackBeats, snapToOnsets };
+  const api = { SR, build, stftMag, tempo, trackBeats, snapToOnsets, pairFeatures, modelScore };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.F33LAnalyze = api;
 })(typeof self !== 'undefined' ? self : this);

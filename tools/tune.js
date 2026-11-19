@@ -1,8 +1,8 @@
 // node tools/tune.js f33l-labels.json [more.json ...]
 // Fits a tiny logistic regression on YOUR "smooth / off" jump labels so we can see which measurements predict a bad cut.
-// Features per jump: s = splice roughness vs a normal beat edge, d = beat similarity distance, l = loudness jump (dB).
+// Features per jump: s = splice roughness vs a normal beat edge, d = beat similarity distance, l = loudness jump (dB), z = learned continuity score (when present).
 const fs = require('fs');
-const FEATS = ['s', 'd', 'l'];
+const FEATS = ['s', 'd', 'l', 'z'];
 
 function fit(rows, iters = 3000, lr = 0.1) {
   const X = rows.map(r => FEATS.map(f => +r[f] || 0)), y = rows.map(r => (r.kind === 'bad' ? 1 : 0));

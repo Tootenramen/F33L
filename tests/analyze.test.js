@@ -37,3 +37,12 @@ test('tune.js finds the measurement that predicts bad jumps', () => {
   assert.ok(r.weights.s > 0 && r.weights.s > Math.abs(r.weights.d) && r.weights.s > Math.abs(r.weights.l), JSON.stringify(r));
   assert.ok(r.accuracy > 0.9, 'accuracy ' + r.accuracy);
 });
+
+test('learned continuity model: feature count matches, scores are finite, build works with it', async () => {
+  const M = require('../continuity_model.js'), x = A.pairFeatures(new Float64Array(36), new Float64Array(36), -30, -20);
+  assert.strictEqual(x.length, M.w.length); assert.strictEqual(M.mu.length, M.w.length); assert.strictEqual(M.sd.length, M.w.length);
+  assert.ok(Number.isFinite(A.modelScore(M, x)));
+  const bar = [220, 330, 440, 660].map(f => tone(f, 0.5)), y = cat(Array(16).fill(bar).flat());
+  const g = await A.build(y, { bpm: 120, model: M });
+  assert.ok(g.edges.length > 0 && g.edges.every(e => Number.isFinite(e.z) && Math.abs(e.b - (e.a + 1)) >= 8));
+});
