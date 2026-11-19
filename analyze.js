@@ -128,7 +128,8 @@
     // splice vectors: the sound just BEFORE each boundary (tail) and just AFTER it (head)
     const SPAN = 3, V = MEL + 12, tail = [], head = [];
     const vecAt = (f0, f1) => { const v = new Float64Array(V); let n = 0; for (let f = Math.max(0, f0); f < Math.min(frames, f1); f++) { for (let j = 0; j < MEL; j++) v[j] += mel[f * MEL + j]; for (let j = 0; j < 12; j++) v[MEL + j] += 10 * chr[f * 12 + j]; n++; } if (n) for (let j = 0; j < V; j++) v[j] /= n; return v; };
-    for (let j = 0; j < nB; j++) { const f = timeToFrame(times[j]); head.push(vecAt(f, f + SPAN)); tail.push(vecAt(f - SPAN, f)); }
+    const dbHead = [], dbTail = [], mdb = (f0, f1) => { let s2 = 0, n2 = 0; for (let f = Math.max(0, f0); f < Math.min(frames, f1); f++) { s2 += db[f]; n2++; } return n2 ? s2 / n2 : -90; };
+    for (let j = 0; j < nB; j++) { const f = timeToFrame(times[j]); head.push(vecAt(f, f + SPAN)); tail.push(vecAt(f - SPAN, f)); dbHead.push(mdb(f, f + SPAN)); dbTail.push(mdb(f - SPAN, f)); }
     const dv = (u, w) => { let s = 0; for (let j = 0; j < V; j++) { const d = u[j] - w[j]; s += d * d; } return Math.sqrt(s); };
     const nat = []; for (let j = 1; j < nB; j++) nat.push(dv(tail[j], head[j]));
     const natMed = percentile(nat, 50) + 1e-9;
@@ -136,7 +137,9 @@
     const unit = v => { let s = 0; for (const x of v) s += x * x; s = Math.sqrt(s) + 1e-9; return v.map(x => x / s); };
     const Tu = T.map(unit), Cu = C.map(unit); let dm = 0; for (const x of D) dm += x; dm /= nB; let dvv = 0; for (const x of D) dvv += (x - dm) ** 2; const dsd = Math.sqrt(dvv / nB) + 1e-9;
     const dot = (u, w) => { let s = 0; for (let j = 0; j < 12; j++) s += u[j] * w[j]; return s; };
-    const beatDist = (a, b) => 0.5 * (1 - dot(Tu[a], Tu[b])) + 0.3 * (1 - dot(Cu[a], Cu[b])) + 0.2 * Math.abs((D[a] - D[b]) / dsd) / 4 + ((a % bar) !== (b % bar) ? 0.15 : 0);
+    const beatDist0 = (a, b) => 0.5 * (1 - dot(Tu[a], Tu[b])) + 0.3 * (1 - dot(Cu[a], Cu[b])) + 0.2 * Math.abs((D[a] - D[b]) / dsd) / 4;
+    const hist = opts.history ?? 0; // experimental: also match the beat BEFORE the cut (measured: no gain, so off by default)
+    const beatDist = (a, b) => beatDist0(a, b) + ((a % bar) !== (b % bar) ? 0.15 : 0) + (hist && a > 0 && b > 0 ? hist * beatDist0(a - 1, b - 1) : 0);
     // candidate jumps: after beat a, continue at beat `dest`
     const cand = [], all = [];
     for (let a = 0; a < nB - 1; a++) for (let dest = 1; dest < nB; dest++) {
@@ -144,9 +147,9 @@
       const bd = beatDist(a, dest - 1), ratio = dv(tail[a + 1], head[dest]) / natMed;
       cand.push([a, dest, bd, ratio]); all.push(bd);
     }
-    const bdCut = Math.min(0.35, percentile(all, 4)), edges = [], byA = new Map();
+    const bdCut = Math.min(0.35 * (1 + (opts.history ?? 0)), percentile(all, 4)), edges = [], byA = new Map();
     for (const c of cand) if (c[2] <= bdCut && c[3] <= maxRatio) { if (!byA.has(c[0])) byA.set(c[0], []); byA.get(c[0]).push(c); }
-    for (const [a, list] of byA) { list.sort((p, q) => (p[3] + 3 * p[2]) - (q[3] + 3 * q[2])); for (const c of list.slice(0, topk)) edges.push({ a, b: c[1], d: +c[2].toFixed(3), s: +c[3].toFixed(2) }); }
+    for (const [a, list] of byA) { list.sort((p, q) => (p[3] + 3 * p[2]) - (q[3] + 3 * q[2])); for (const c of list.slice(0, topk)) edges.push({ a, b: c[1], d: +c[2].toFixed(3), s: +c[3].toFixed(2), l: +Math.abs(dbTail[a + 1] - dbHead[c[1]]).toFixed(1) }); }
     const d10 = percentile(D, 10), d90 = percentile(D, 90), c10 = percentile(CE, 10), c90 = percentile(CE, 90), clip = x => Math.max(0, Math.min(1, x));
     const nodes = times.map((t, i) => ({ i, t: +t.toFixed(3), arousal: +clip((D[i] - d10) / (d90 - d10 + 1e-9)).toFixed(2), brightness: +clip((CE[i] - c10) / (c90 - c10 + 1e-9)).toFixed(2) }));
     onProgress(1);
