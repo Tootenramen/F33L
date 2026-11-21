@@ -14,7 +14,7 @@ const consistent = (tc, tl) => { const u = wordAt(tc), v = wordAt(tl); if (!u &&
   const model = require('../continuity_model.js'), rows = [];
   for (const [name, opts] of [['distance', {}], ['learned', { model }], ['eternal', { style: 'eternal' }], ['eternal+smooth', { style: 'eternal', eternalSmooth: true }]]) {
     const g = await A.build(y, opts); let n = 0, s = 0, l = 0, e = 0, ok = 0;
-    for (const x of g.edges) { n++; const a = inWord(g.nodes[Math.min(x.a + 1, g.nodes.length - 1)].t), b = inWord(g.nodes[x.b].t); s += a; l += b; e += (a || b); ok += consistent(g.nodes[Math.min(x.a + 1, g.nodes.length - 1)].t, g.nodes[x.b].t); }
+    for (const x of g.edges) { n++; const a = inWord(g.nodes[Math.min(x.a + 1, g.nodes.length - 1)].t), b = inWord(g.nodes[x.b].t + (x.o || 0)); s += a; l += b; e += (a || b); ok += consistent(g.nodes[Math.min(x.a + 1, g.nodes.length - 1)].t, g.nodes[x.b].t + (x.o || 0)); }
     const nat = g.nodes.filter(nd => inWord(nd.t)).length / g.nodes.length;
     rows.push({ mode: name, edges: n, srcMid: +(s / n).toFixed(3), landMid: +(l / n).toFixed(3), either: +(e / n).toFixed(3), wordConsistent: +(ok / n).toFixed(3), chanceBeatInWord: +nat.toFixed(3) });
   }

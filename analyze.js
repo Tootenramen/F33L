@@ -186,6 +186,14 @@
     const smooth = c => (segDistBeat && !opts.eternalSmooth ? true : MODEL ? c[4] <= cutZ : c[3] <= maxRatio), rank = c => (MODEL ? c[4] + 6 * c[2] : c[3] + 3 * c[2]);
     for (const c of cand) if (c[2] <= bdCut && smooth(c)) { if (!byA.has(c[0])) byA.set(c[0], []); byA.get(c[0]).push(c); }
     for (const [a, list] of byA) { list.sort((p, q) => rank(p) - rank(q)); for (const c of list.slice(0, topk)) edges.push({ a, b: c[1], d: +c[2].toFixed(3), s: +c[3].toFixed(2), z: +c[4].toFixed(2), l: +Math.abs(dbTail[a + 1] - dbHead[c[1]]).toFixed(1) }); }
+    if (opts.align) {   // fine alignment: slide the landing point by up to +-50 ms to where the audio before AND after the cut matches best (waveform-level, like a DJ phase-matching a loop)
+      const Wn = 1024, RNG = 1100, STEP = 24, ncc = (p0, q0) => { let ab = 0, aa = 0, bb = 0; for (let i = 0; i < Wn; i++) { const u = y[p0 + i], v = y[q0 + i]; ab += u * v; aa += u * u; bb += v * v; } return ab / (Math.sqrt(aa * bb) + 1e-9); };
+      for (const e of edges) {
+        const sc = Math.round(times[e.a + 1] * SR), sl = Math.round(times[e.b] * SR); let best = -9, bo = 0;
+        for (let o = -RNG; o <= RNG; o += STEP) { const l = sl + o; if (sc - Wn < 0 || l - Wn < 0 || sc + Wn > y.length || l + Wn > y.length) continue; const v = ncc(sc - Wn, l - Wn) + ncc(sc, l) - 0.04 * Math.abs(o) / RNG; if (v > best) { best = v; bo = o; } }
+        e.o = +(bo / SR).toFixed(4); e.m = +best.toFixed(2);
+      }
+    }
     const d10 = percentile(D, 10), d90 = percentile(D, 90), c10 = percentile(CE, 10), c90 = percentile(CE, 90), clip = x => Math.max(0, Math.min(1, x));
     const nodes = times.map((t, i) => ({ i, t: +t.toFixed(3), arousal: +clip((D[i] - d10) / (d90 - d10 + 1e-9)).toFixed(2), brightness: +clip((CE[i] - c10) / (c90 - c10 + 1e-9)).toFixed(2) }));
     onProgress(1);

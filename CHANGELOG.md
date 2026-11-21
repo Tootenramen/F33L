@@ -35,3 +35,8 @@ All notable changes to F33L. Newest first. Versions are milestones; each links t
 
 ## v0.1.0 - 2026-11-18: the question ([10d1cd4](../../commit/10d1cd4))
 - Premise, research questions, principles and roadmap.
+
+## Unreleased
+- New cut style "Eternal-style (sound segments)": segments the song at onsets and compares beats by their sequence of sounds, mirroring the structure of the original Eternal Jukebox (own analysis, no Spotify data).
+- Word-level measurement tools (tools/words.py, tools/midword.js): how many jumps cut inside a word, and how many are word-consistent. Findings in docs/DEVLOG.md.
+- Local helper finds ffmpeg by itself.

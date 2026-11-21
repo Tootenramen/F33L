@@ -87,3 +87,12 @@ branch, max 4 branches per beat, one extra long backward branch, jump chance ram
 We mirror that with our own onset segmenter + segment descriptors (no Spotify data). Measured on Revenge (word timestamps):
 word-consistent jumps (neither end inside a word, or both inside the SAME word at the same point +-70 ms): distance 15%, learned 15.5%, eternal 18%.
 Mid-word rate is unchanged (~75% source, ~70% landing): in dense rap almost any cut is inside a word, so segment matching alone cannot avoid it.
+
+### Results, three vocal tracks with word timestamps (Revenge, Bluey, PuppyCat; Kick Me transcribed to 0 words, unusable)
+word-consistent jumps: distance 15% / 68% / 41%; learned 16% / 64% / 40%; eternal+smooth 18% / 71% / 43%; plain eternal 18% / 72% / 30%.
+So eternal+smooth is >= distance on all three, by small margins; plain eternal is worse on PuppyCat. Independent splice proxy (% as smooth as a
+natural edge, p75): Revenge 80 -> 71, Bluey 30 -> 39, PuppyCat 81 -> 83: mixed. Shipped as the opt-in "Eternal-style" cut style, default unchanged.
+Negative results: waveform fine-alignment of the landing (+-50 ms, NCC before and after the cut) changed word-consistency by +-0.3 points;
+matching the lead-in (history 1-2) lowered it slightly (15.0 -> 14.8 / 14.4); loudness at the boundary cannot tell a word gap from a word
+(AUC 0.53 and 0.50, because the instrumental is mixed in), so no cheap audio-only gap detector exists yet. A vocal-isolation model
+(e.g. a source separator) would be the next real lever, and it is a heavy dependency.
