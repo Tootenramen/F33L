@@ -101,3 +101,7 @@ matching the lead-in (history 1-2) lowered it slightly (15.0 -> 14.8 / 14.4); lo
 distance: 66% of jumps touch a word middle, 35% word-consistent. learned: 66% / 35%. eternal (+smooth): 61.5% / 39%.
 Splice proxy prefers distance (88% vs 75% as smooth as a natural edge). Same split as before: the segment-based style wins on words, the plain
 distance wins on raw audio smoothness. Listener test needed to settle which matters more.
+
+### Paused (2026-11-20)
+Vocal separation set up but not yet evaluated: demucs (htdemucs, two-stem) installed in outputs/sepvenv (git-ignored) and vocals/no_vocals stems
+produced for We On Go. Next step when resumed: run the gap probe (tools/gapprobe.js) on the vocals stem and test a vocal-gap penalty against the word labels.
