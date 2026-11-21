@@ -96,3 +96,8 @@ Negative results: waveform fine-alignment of the landing (+-50 ms, NCC before an
 matching the lead-in (history 1-2) lowered it slightly (15.0 -> 14.8 / 14.4); loudness at the boundary cannot tell a word gap from a word
 (AUC 0.53 and 0.50, because the instrumental is mixed in), so no cheap audio-only gap detector exists yet. A vocal-isolation model
 (e.g. a source separator) would be the next real lever, and it is a heavy dependency.
+
+### We On Go (BIA), 459 words transcribed, 240 s
+distance: 66% of jumps touch a word middle, 35% word-consistent. learned: 66% / 35%. eternal (+smooth): 61.5% / 39%.
+Splice proxy prefers distance (88% vs 75% as smooth as a natural edge). Same split as before: the segment-based style wins on words, the plain
+distance wins on raw audio smoothness. Listener test needed to settle which matters more.
