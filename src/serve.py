@@ -13,7 +13,21 @@ from urllib.parse import urlparse, parse_qs, quote
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 YT_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"}
 MAX_SECONDS = 15 * 60
-FFMPEG = os.environ.get("F33L_FFMPEG") or "ffmpeg"
+def find_ffmpeg():
+    """env var, then PATH, then the usual winget install folder, so the helper works without flags."""
+    e = os.environ.get("F33L_FFMPEG")
+    if e: return e
+    w = shutil.which("ffmpeg")
+    if w: return w
+    pats = [os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\WinGet\Packages\*FFmpeg*\**infmpeg.exe"),
+            os.path.expandvars(r"%LOCALAPPDATA%\Microsoft\WinGet\Linksfmpeg.exe"), r"C:fmpeginfmpeg.exe"]
+    for pat in pats:
+        hit = sorted(glob.glob(pat, recursive=True))
+        if hit: return hit[-1]
+    return "ffmpeg"
+
+
+FFMPEG = find_ffmpeg()
 
 
 def validate_url(u):
@@ -101,7 +115,7 @@ def main():
     a = ap.parse_args()
     if a.ffmpeg: FFMPEG = a.ffmpeg
     srv = ThreadingHTTPServer(("127.0.0.1", a.port), Handler)
-    print(f"F33L on http://127.0.0.1:{a.port}/   (YouTube links: {'ready' if ytdlp_cmd() else 'install yt-dlp to enable'})")
+    print(f"F33L on http://127.0.0.1:{a.port}/   (YouTube links: {'ready' if ytdlp_cmd() else 'install yt-dlp to enable'}; ffmpeg: {FFMPEG})")
     try: srv.serve_forever()
     except KeyboardInterrupt: pass
 
