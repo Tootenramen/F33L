@@ -135,6 +135,27 @@
       for (let j = 0; j < 12; j++) { tm[j] -= tmean; ch[j] /= (cs + 1e-9); }
       T.push(tm); C.push(ch); D[i] = d / n; CE[i] = c / n; onProgress(0.7 + 0.1 * i / nB);
     }
+    // Eternal-Jukebox-style structure: cut the song into sound segments at onsets, describe each segment, and compare two beats by the
+    // SEQUENCE of segments inside them (same number of sounds, same shapes, same rhythm). Same recipe as EternalBox's jremix.js/go-js.html,
+    // but our own segmenter and our own timbre/chroma (no Spotify analysis).
+    let segDistBeat = null;
+    if (opts.style === 'eternal') {
+      const sb = [0]; { let last = 0; for (let f = 3; f < frames - 3; f++) { let m = 0; for (let k = f - 8; k <= f + 8; k++) m += flux[Math.max(0, Math.min(frames - 1, k))]; m /= 17; let pk = true; for (let k = f - 2; k <= f + 2; k++) if (flux[Math.max(0, Math.min(frames - 1, k))] > flux[f]) pk = false; if (pk && flux[f] > 1.4 * m + 1e-6 && f - last >= 4) { sb.push(f); last = f; } } sb.push(frames); }
+      const S = [];
+      for (let i = 0; i + 1 < sb.length; i++) {
+        const a = sb[i], b = sb[i + 1], n = b - a, tm = new Float64Array(12), ch = new Float64Array(12); let mx = -99, ls = 0, tmean = 0, cs = 0;
+        for (let f = a; f < b; f++) { for (let j = 0; j < 12; j++) { tm[j] += (mel[f * MEL + 2 * j] + mel[f * MEL + 2 * j + 1]) / 2; ch[j] += chr[f * 12 + j]; } mx = Math.max(mx, db[f]); }
+        for (let f = a; f < Math.min(b, a + 2); f++) ls += db[f] / Math.min(n, 2);
+        for (let j = 0; j < 12; j++) { tm[j] /= n; ch[j] /= n; tmean += tm[j] / 12; cs += ch[j]; } for (let j = 0; j < 12; j++) { tm[j] -= tmean; ch[j] /= (cs + 1e-9); }
+        S.push({ t0: a / fps, t1: b / fps, tm, ch, ls, mx, dur: n / fps, which: i });
+      }
+      const raw = (u, w) => { let t = 0, c = 0; for (let j = 0; j < 12; j++) { t += (u.tm[j] - w.tm[j]) ** 2; c += (u.ch[j] - w.ch[j]) ** 2; } return [Math.sqrt(t), Math.sqrt(c), Math.abs(u.ls - w.ls), Math.abs(u.mx - w.mx), Math.abs(u.dur - w.dur)]; };
+      const sc = [1, 1, 1, 1, 1]; { const acc = [[], [], [], [], []]; let sd = 7; for (let k = 0; k < 1500; k++) { sd = (sd * 16807) % 2147483647; const u = S[sd % S.length]; sd = (sd * 16807) % 2147483647; const w = S[sd % S.length]; if (u === w) continue; raw(u, w).forEach((v, j) => acc[j].push(v)); } acc.forEach((a, j) => sc[j] = percentile(a, 50) + 1e-6); }
+      const W = [1, 0.7, 0.35, 0.35, 1.2];            // timbre, pitch(chroma), loudness start, loudness max, duration (EternalBox: 1, 10, 1, 1, 100 in Spotify units)
+      const segDist = (u, w) => { if (u.which === w.which) return 4; const r = raw(u, w); let d = 0; for (let j = 0; j < 5; j++) d += W[j] * r[j] / sc[j]; return d; };
+      const over = []; for (let i = 0; i < nB; i++) { const t0 = times[i], t1 = bound(i + 1), l = []; for (const g of S) { if (g.t1 < t0) continue; if (g.t0 > t1) break; l.push(g); } over.push(l); }
+      segDistBeat = (a, b) => { const A1 = over[a], B1 = over[b]; if (!A1.length) return 4; let sum = 0; for (let j = 0; j < A1.length; j++) sum += j < B1.length ? segDist(A1[j], B1[j]) : 4; return sum / A1.length; };
+    }
     // splice vectors: the sound just BEFORE each boundary (tail) and just AFTER it (head)
     const SPAN = 3, V = MEL + 12, tail = [], head = [];
     const vecAt = (f0, f1) => { const v = new Float64Array(V); let n = 0; for (let f = Math.max(0, f0); f < Math.min(frames, f1); f++) { for (let j = 0; j < MEL; j++) v[j] += mel[f * MEL + j]; for (let j = 0; j < 12; j++) v[MEL + j] += 10 * chr[f * 12 + j]; n++; } if (n) for (let j = 0; j < V; j++) v[j] /= n; return v; };
@@ -149,7 +170,8 @@
     const dot = (u, w) => { let s = 0; for (let j = 0; j < 12; j++) s += u[j] * w[j]; return s; };
     const beatDist0 = (a, b) => 0.5 * (1 - dot(Tu[a], Tu[b])) + 0.3 * (1 - dot(Cu[a], Cu[b])) + 0.2 * Math.abs((D[a] - D[b]) / dsd) / 4;
     const hist = opts.history ?? 0; // experimental: also match the beat BEFORE the cut (measured: no gain, so off by default)
-    const beatDist = (a, b) => beatDist0(a, b) + ((a % bar) !== (b % bar) ? 0.15 : 0) + (hist && a > 0 && b > 0 ? hist * beatDist0(a - 1, b - 1) : 0);
+    const beatDistM = (a, b) => beatDist0(a, b) + ((a % bar) !== (b % bar) ? 0.15 : 0) + (hist && a > 0 && b > 0 ? hist * beatDist0(a - 1, b - 1) : 0);
+    const beatDist = segDistBeat ? ((a, b) => segDistBeat(a + 1, b + 1) / 4 + ((a % bar) !== (b % bar) ? 0.15 : 0)) : beatDistM;  // eternal style compares beat a+1 with the landing beat
     // candidate jumps: after beat a, continue at beat `dest`
     const cand = [], all = [];
     let natZ = [], cutZ = Infinity;
@@ -160,8 +182,8 @@
       const z = MODEL ? modelScore(MODEL, pairFeatures(tail[a + 1], head[dest], dbTail[a + 1], dbHead[dest])) : 0;
       cand.push([a, dest, bd, ratio, z]); all.push(bd);
     }
-    const bdCut = Math.min(0.35 * (1 + (opts.history ?? 0)), percentile(all, 4)), edges = [], byA = new Map();
-    const smooth = c => (MODEL ? c[4] <= cutZ : c[3] <= maxRatio), rank = c => (MODEL ? c[4] + 6 * c[2] : c[3] + 3 * c[2]);
+    const bdCut = segDistBeat ? percentile(all, opts.eternalPct ?? 2) : Math.min(0.35 * (1 + (opts.history ?? 0)), percentile(all, 4)), edges = [], byA = new Map();
+    const smooth = c => (segDistBeat && !opts.eternalSmooth ? true : MODEL ? c[4] <= cutZ : c[3] <= maxRatio), rank = c => (MODEL ? c[4] + 6 * c[2] : c[3] + 3 * c[2]);
     for (const c of cand) if (c[2] <= bdCut && smooth(c)) { if (!byA.has(c[0])) byA.set(c[0], []); byA.get(c[0]).push(c); }
     for (const [a, list] of byA) { list.sort((p, q) => rank(p) - rank(q)); for (const c of list.slice(0, topk)) edges.push({ a, b: c[1], d: +c[2].toFixed(3), s: +c[3].toFixed(2), z: +c[4].toFixed(2), l: +Math.abs(dbTail[a + 1] - dbHead[c[1]]).toFixed(1) }); }
     const d10 = percentile(D, 10), d90 = percentile(D, 90), c10 = percentile(CE, 10), c90 = percentile(CE, 90), clip = x => Math.max(0, Math.min(1, x));

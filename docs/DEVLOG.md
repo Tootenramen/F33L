@@ -78,3 +78,12 @@ jumps land mid-word at the same rate (source 74%, landing 68-71%, either end 89%
 Meaning: the engine is currently blind to words, as suspected; on rap almost any beat cut is mid-word, so it needs a
 vocal-aware term. An oracle that only takes gap-to-gap jumps would leave ~11% of edges, so there is room. Next: an
 audio-only proxy for "this boundary is in a word gap" (voice-band level at the cut), validated against these labels.
+
+## Reading EternalBox's source, and an "eternal" style (opt-in, `style:'eternal'`)
+What the original does (go-js.html / jremix.js): Spotify's analysis supplies beats AND sound segments (timbre 12, pitch 12, loudness start/max,
+duration, confidence). Two beats are compared by the SEQUENCE of segments inside them, index by index: timbre + 10x pitch + loudness + 100x duration
+(Spotify units), plus a hard penalty if the beats sit at different places in their bar. Threshold is raised until ~1/6 of the beats have a
+branch, max 4 branches per beat, one extra long backward branch, jump chance ramps up between jumps. Playback cuts exactly on Spotify beat boundaries.
+We mirror that with our own onset segmenter + segment descriptors (no Spotify data). Measured on Revenge (word timestamps):
+word-consistent jumps (neither end inside a word, or both inside the SAME word at the same point +-70 ms): distance 15%, learned 15.5%, eternal 18%.
+Mid-word rate is unchanged (~75% source, ~70% landing): in dense rap almost any cut is inside a word, so segment matching alone cannot avoid it.
