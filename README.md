@@ -33,8 +33,6 @@ you can steer a song by feeling. Everything runs in your browser. Your audio nev
 ## Use it
 **On the website:** press **Try the demo song**, or drop in your own audio or video file (mp3, wav, m4a, mp4...). F33L listens to the song right in your browser (a few seconds), builds the beat map, and loops it forever. Nothing is uploaded.
 
-**Loop a YouTube video on the website (tab recording):** play the video in another Chrome or Edge tab, press **Record a tab** on F33L, pick that tab, tick *Also share tab audio*, press play on the video from the start, and press **Stop and loop it** when the song ends. F33L trims the silence, listens to what it recorded and loops it. Nothing is downloaded or uploaded; it works in real time, so a 4-minute song takes 4 minutes. Chrome or Edge on a computer only (Firefox and Safari do not share tab audio).
-
 **Loop a YouTube link (local only):** the public site cannot fetch videos, so this runs on your own computer.
 1. Install Python, ffmpeg and yt-dlp (`winget install yt-dlp`, or `pip install yt-dlp`).
 2. Run `python src/serve.py` and open http://127.0.0.1:8765/ (the helper prints the address; use `--port` if that one is taken).

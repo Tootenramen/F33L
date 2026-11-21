@@ -96,8 +96,6 @@ footer{margin-top:44px;color:var(--dim);font-size:.8rem}
     <label class="glass drop" id="d1"><span class="n">1</span><span><b>Your song</b><small id="n1">Drop in an audio or video file (mp3, wav, m4a, mp4...)</small></span><input id="aud" type="file" accept="audio/*,video/*"></label>
     <div class="glass drop" id="d2" hidden><span class="n">2</span><span style="flex:1"><b>Or a YouTube link</b><small id="n2">Runs on your computer with the local helper</small>
       <span class="yt"><input id="ytu" type="url" placeholder="https://www.youtube.com/watch?v=..." aria-label="YouTube link"><button id="ytb" class="btn pri sm">Loop it</button></span><small id="yts" role="status" aria-live="polite" style="margin-top:8px"></small></span></div>
-    <div class="glass drop" id="d3" hidden><span class="n">3</span><span style="flex:1"><b>Or record a browser tab (works with YouTube)</b><small id="n3">Play the song in another tab, share that tab with its audio, and F33L loops what it hears. Chrome or Edge on a computer. Nothing leaves your device.</small>
-      <span class="yt"><button id="tbb" class="btn pri sm">Record a tab</button><button id="tbe" class="btn sm" hidden>Stop and loop it</button></span><small id="tbm" role="status" aria-live="polite" style="margin-top:8px"></small></span></div>
   </div>
   <p class="note" id="local" hidden></p>
 
@@ -132,12 +130,8 @@ function ready(){const ok=!!(buf&&g);$('go').disabled=!ok;$('fb').hidden=!ok;if(
   if(ok){$('st').textContent=`${g.edges.length} possible jumps at ${g.bpm} BPM. Press Play.`;}draw();}
 const setBusy=(t)=>{$('st').textContent=t;$('yts').textContent=t;};
 async function toMono22k(ab){const oc=new OfflineAudioContext(1,Math.ceil(ab.duration*22050),22050),sr=oc.createBufferSource();sr.buffer=ab;sr.connect(oc.destination);sr.start();return (await oc.startRendering()).getChannelData(0);}
-function trimSilence(b){const ch=[];for(let c=0;c<b.numberOfChannels;c++)ch.push(b.getChannelData(c));const n=b.length,th=0.01,pad=Math.round(b.sampleRate*0.15);
-  let i=0,j=n-1;const loud=k=>ch.some(d=>Math.abs(d[k])>th);while(i<n&&!loud(i))i++;while(j>i&&!loud(j))j--;
-  i=Math.max(0,i-pad);j=Math.min(n-1,j+pad);if(i>=j||(i===0&&j===n-1))return b;
-  const o=ctx.createBuffer(b.numberOfChannels,j-i+1,b.sampleRate);for(let c=0;c<ch.length;c++)o.copyToChannel(ch[c].subarray(i,j+1),c);return o;}
-async function useAudio(arrayBuffer,label,trim){
-  try{ctx=ctx||new AudioContext();setBusy('Decoding...');g=null;buf=await ctx.decodeAudioData(arrayBuffer);if(trim)buf=trimSilence(buf);}
+async function useAudio(arrayBuffer,label){
+  try{ctx=ctx||new AudioContext();setBusy('Decoding...');g=null;buf=await ctx.decodeAudioData(arrayBuffer);}
   catch(e){$('n1').textContent='Could not read that file. Try an mp3, wav or m4a.';setBusy('');return;}
   $('n1').textContent=label;$('d1').classList.add('ok');
   try{const y=await toMono22k(buf);setBusy('Listening to the song...');
@@ -156,29 +150,7 @@ $('ytb').onclick=ytLoop;$('ytu').addEventListener('keydown',e=>{if(e.key==='Ente
   try{const h=await (await fetch('/api/health',{headers:{'X-F33L':'1'}})).json();
     if(h&&h.ok){$('d2').hidden=false;if(!h.youtube){$('n2').textContent='Install yt-dlp to turn this on: winget install yt-dlp';$('ytu').disabled=true;$('ytb').disabled=true;}
       note.hidden=false;note.textContent='For your own listening. Please respect the service terms and the artist.';}}
-  catch(e){$('d3').querySelector('.n').textContent='2';note.hidden=false;note.textContent='Want to loop a YouTube link? Record that tab right here, or run the local helper: python src/serve.py (see the README).';}})();
-(function(){
-  if(!(navigator.mediaDevices&&navigator.mediaDevices.getDisplayMedia&&window.MediaRecorder))return;
-  $('d3').hidden=false;
-  let rec=null,chunks=[],t0=0,tick=null,stream=null;
-  const fmt=s=>Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0'),msg=t=>{$('tbm').textContent=t;$('st').textContent=t;};
-  function cleanup(){clearInterval(tick);if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;$('tbb').hidden=false;$('tbe').hidden=true;}
-  const stop=()=>{if(rec&&rec.state==='recording')rec.stop();};
-  async function start(){
-    try{stream=await navigator.mediaDevices.getDisplayMedia({video:true,audio:true});}catch(e){msg('Recording cancelled.');return;}
-    const at=stream.getAudioTracks();
-    if(!at.length){msg('No audio was shared. Choose a Chrome tab (not a window) and tick "Also share tab audio".');cleanup();return;}
-    const type=['audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus'].find(t=>MediaRecorder.isTypeSupported(t));
-    chunks=[];rec=new MediaRecorder(new MediaStream(at),type?{mimeType:type}:undefined);
-    rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data);};
-    rec.onstop=async()=>{const secs=(Date.now()-t0)/1000,blob=new Blob(chunks,{type:rec.mimeType||'audio/webm'});cleanup();
-      if(secs<20||blob.size<2000){msg('That was only '+fmt(secs)+'. Record at least 20 seconds, ideally the whole song.');return;}
-      msg('Got '+fmt(secs)+' of audio. Getting ready...');await useAudio(await blob.arrayBuffer(),'Tab recording ('+fmt(secs)+')',true);$('tbm').textContent=$('st').textContent;};
-    at[0].addEventListener('ended',stop);stream.getVideoTracks().forEach(t=>t.addEventListener('ended',stop));
-    rec.start(1000);t0=Date.now();$('tbb').hidden=true;$('tbe').hidden=false;
-    tick=setInterval(()=>{const s=(Date.now()-t0)/1000;msg('Recording '+fmt(s)+'. Play the song from the start in the shared tab. Press Stop when it ends.');if(s>=900)stop();},500);}
-  $('tbb').onclick=start;$('tbe').onclick=stop;
-})();
+  catch(e){note.hidden=false;note.textContent='Want to loop a YouTube link? Run the local helper: python src/serve.py (see the README).';}})();
 async function loadDemo(){
   $('st').textContent='Loading the demo...';
   try{g=await fetch('demo/graph.json').then(r=>r.json());g.out={};g.edges.forEach(x=>(g.out[x.a]=g.out[x.a]||[]).push(x.b));

@@ -1,10 +1,6 @@
 # Changelog
 All notable changes to F33L. Newest first. Versions are milestones; each links to the commit that closed it.
 
-## v0.8.0 - 2026-11-20: record a browser tab
-- **Record a tab** on the website: share a Chrome/Edge tab with its audio (for example a YouTube video), F33L records it in your browser, trims leading and trailing silence, and loops it. No server, no download. Needs real-time listening and a Chromium browser.
-- Tested end to end with a stubbed tab stream (recorded, trimmed, analyzed to the same 103.4 BPM as the demo), plus the no-audio and cancelled paths. The real tab picker was not automated.
-
 ## v0.7.0 - 2026-11-19: learned cut scoring, switchable
 - **Cut style switch** in the player: *smoothest* (plain distance, default) or *natural (learned)*. Labels now record which style you heard.
 - **`continuity_model.js` + `tools/continuity.js`:** a small model trained to tell real beat edges from random splices. Leave-one-song-out on five tracks: mean AUC 0.817 to 0.868 (hard cases 0.774 to 0.838). My raw-difference proxy slightly prefers the plain distance, so it is opt-in until a listener decides. See DEVLOG.
